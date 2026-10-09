@@ -1,0 +1,1 @@
+{"ctor":{"l":"constructor","q":[["There is one important caveat with ctor-initializers: They initialize data members in the order that they appear in the class definition, not their order in the ctor-initializer.","2014, Marc Gregoire, Professional C++, John Wiley & Sons, →ISBN, page 162:"]]},"ctonic":{"l":"chthonic"},"ctors":{"l":"ctor"}}

@@ -1,0 +1,1 @@
+{"dylibs":{"l":"dylib"},"dylib":{"q":[["Compiler flags of particular interest in Mac OS X are related to the peculiarities of building shared code, for example, the compiler flag –dynamiclib, which is used to build Mach-O dylibs.","2005, Brian Jepson, Ernest E. Rothman, Mac OS X Tiger for Unix Geeks, O'Reilly, →ISBN, page 199:"]]}}

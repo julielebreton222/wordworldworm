@@ -275,3 +275,22 @@ a.w:hover { background: var(--mark); }
 .poem-body span { display: block; }
 .poem-body .stanza-break { height: 1em; }
 .poem-body mark, .passage mark { background: var(--mark); color: inherit; border-radius: 3px; }
+
+.etym-n {
+  display: inline-block; min-width: 1.4em; text-align: center; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent); font-size: 14px; margin-right: 2px;
+}
+.etym-block { position: relative; }
+.etym-block + .etym-block { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.etym-block > .etym-n { float: left; margin: 3px 8px 0 0; }
+.lineage {
+  list-style: none; padding: 0; margin: 4px 0 12px; display: flex; flex-wrap: wrap; align-items: center;
+  gap: 4px 0; font-size: 15px; color: var(--muted);
+}
+.lineage li { white-space: nowrap; }
+.lineage li em { color: var(--ink); }
+.lineage li + li::before { content: "→"; margin: 0 8px; color: var(--gold); }
+.lineage li:last-child { color: var(--accent); }
+.etym-block details { margin: 6px 0 10px; font-size: 16px; color: var(--muted); }
+.etym-block summary { cursor: pointer; font-size: 13px; text-transform: uppercase; letter-spacing: .14em; }
+.etym-block details p { margin-top: 6px; }

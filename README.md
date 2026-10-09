@@ -55,6 +55,10 @@ folder `/ (root)`), open the link, and use "Add to Home Screen". It installs as 
 ## Data sources (free, no keys)
 
 - [Datamuse](https://www.datamuse.com/api/): definitions, synonyms, antonyms, rhymes, syllables, stress, pairings
-- [Wiktionary](https://en.wiktionary.org): etymology, IPA, hyphenation, quotations (cached in the browser after the first lookup)
+- **Bundled dictionary** (`data/w/`): etymologies for ~360,000 English words, pronunciations and
+  book quotations, extracted from [Wiktionary](https://en.wiktionary.org) via [kaikki.org](https://kaikki.org)
+  (CC BY-SA 4.0). Inflected forms point to their base word (*embers* → *ember*). It ships with the
+  app, so origins load instantly and never hit Wiktionary's rate limits
+- [Wiktionary](https://en.wiktionary.org) live: fallback for words the bundle lacks
 - [PoetryDB](https://poetrydb.org): public-domain poems, in full
 - [Wikiquote](https://en.wikiquote.org) and [Wikisource](https://en.wikisource.org): quotations and classic texts

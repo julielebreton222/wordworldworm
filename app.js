@@ -64,6 +64,52 @@
     return feet[p] || null;
   }
 
+  // ---------- bundled dictionary: etymology, IPA, quotations ----------
+  // data/w/<first three letters>.json holds an extract of English Wiktionary (via kaikki.org):
+  //   { word: { e: [etymologies], i: "/ipa/", q: [[quotation, source]], l: "lemma" } }
+  // `l` is set for inflected forms, so "embers" leads to "ember". Shards load on demand and stay cached.
+  const shards = {};
+  const shardKey = (w) => (w + "__").slice(0, 3).replace(/[^a-z_]/g, "_");
+  const shard = (w) => (shards[shardKey(w)] ||= getJSON(`data/w/${shardKey(w)}.json`).catch(() => ({})));
+
+  // Bundled etymologies are plain text. Many start with an "Etymology tree" (one ancestor per line,
+  // oldest first), which is drawn here as a lineage; short lines like "Cognates" become subheadings.
+  function etymHTML(text) {
+    const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+    let out = "", open = false;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (/^PIE (word|root)$/.test(line)) { i++; continue; } // a caption plus its root, repeated in the tree
+      if (line === "Etymology tree") {
+        const steps = [];
+        while (i + 1 < lines.length && lines[i + 1].length < 70 && !/[.:;]$/.test(lines[i + 1]) &&
+               !/^(From|Borrowed|Inherited|Learned|Compound|Coined|Blend|Clipping|Back-formation)\b/.test(lines[i + 1])) {
+          steps.push(lines[++i]);
+        }
+        out += `<ol class="lineage">${steps.map((st) => {
+          const cut = st.lastIndexOf(" ");
+          return cut > 0 ? `<li>${esc(st.slice(0, cut))} <em>${esc(st.slice(cut + 1))}</em></li>` : `<li>${esc(st)}</li>`;
+        }).join("")}</ol>`;
+      } else if (line.length < 30 && !/[.,;:]$/.test(line) && /^[A-Z]/.test(line) && !line.includes(" ")) {
+        // Side notes such as "Cognates" fold away so the word's own story reads first.
+        out += `${open ? "</details>" : ""}<details><summary>${esc(line)}</summary>`;
+        open = true;
+      } else {
+        const cut = i === lines.length - 1 && !/[.)”"\]]$/.test(line) ? "…" : ""; // the extract trims long notes
+        out += `<p>${esc(line)}${cut}</p>`;
+      }
+    }
+    return out + (open ? "</details>" : "");
+  }
+
+  async function bundled(word) {
+    const entry = (await shard(word))[word];
+    if (!entry) return null;
+    if (entry.e || !entry.l) return { ...entry, word };
+    const base = (await shard(entry.l))[entry.l];
+    return base ? { ...base, word: entry.l, formOf: entry.l, i: entry.i || base.i } : null;
+  }
+
   // ---------- Wiktionary: etymology, IPA, hyphenation ----------
   // Turn a Wiktionary <p> into safe HTML: plain text, with the quoted word forms kept in italics.
   function cleanNode(node, boldAsMark = false) {
@@ -407,15 +453,27 @@
       fill("defs", html || empty("No definition found."));
     })).catch(fail("defs"));
 
-    // Origin + IPA
-    wiktionary(word).then(guard((w) => {
+    // Origin + IPA: the bundled dictionary first, live Wiktionary only for words it lacks.
+    const local = bundled(word);
+    const wikiLink = (w) => `<p class="src"><a href="https://en.wiktionary.org/wiki/${encodeURIComponent(w)}#English" target="_blank" rel="noopener">Read more on Wiktionary →</a></p>`;
+    local.then(guard((loc) => {
+      if (loc && loc.i) $("#pron").insertAdjacentHTML("afterbegin", `<span class="ipa">${esc(loc.i)}</span>`);
+      if (loc && loc.e) {
+        const form = loc.formOf ? `<p class="muted">“${esc(word)}” is a form of <a href="#/${encodeURIComponent(loc.formOf)}">${esc(loc.formOf)}</a>.</p>` : "";
+        const many = loc.e.length > 1;
+        return fill("etym", form + loc.e.map((t, n) =>
+          `<div class="etym-block">${many ? `<span class="etym-n">${n + 1}</span>` : ""}${etymHTML(t)}</div>`).join("") + wikiLink(loc.word));
+      }
+      liveOrigin();
+    })).catch(guard(() => liveOrigin()));
+
+    const liveOrigin = () => wiktionary(word).then(guard((w) => {
       if (w && (w.ipa || w.hyphenation)) {
         $("#pron").insertAdjacentHTML("afterbegin",
-          `${w.ipa ? `<span class="ipa">${esc(w.ipa)}</span>` : ""}${w.hyphenation ? `<span class="hyph">${esc(w.hyphenation)}</span>` : ""}`);
+          `${w.ipa && !$("#pron .ipa") ? `<span class="ipa">${esc(w.ipa)}</span>` : ""}${w.hyphenation ? `<span class="hyph">${esc(w.hyphenation)}</span>` : ""}`);
       }
       if (!w || !w.etymology.length) return fill("etym", empty("No etymology recorded for this word."));
-      fill("etym", w.etymology.map((p) => `<p>${p}</p>`).join("") +
-        `<p class="src"><a href="https://en.wiktionary.org/wiki/${encodeURIComponent(word)}#English" target="_blank" rel="noopener">Read more on Wiktionary →</a></p>`);
+      fill("etym", w.etymology.map((p) => `<p>${p}</p>`).join("") + wikiLink(word));
     })).catch(fail("etym"));
 
     // Rhymes, grouped by syllable count
@@ -478,8 +536,11 @@
              <button type="button" data-save-poem="${esc(id)}" class="${isSaved(id) ? "on" : ""}">${saveLabel(id)}</button>
            </span>`);
       })))).catch(() => 0),
-      wiktionary(word).then(guard((w) => group("lit-books", "Quoted in books", ((w && w.quotes) || []).map((q) =>
-        figure(q.text, esc(q.cite)))))).catch(() => 0),
+      local.then(async (loc) => {
+        if (loc && loc.q) return loc.q.map(([text, cite]) => figure(highlight(text, loc.word), esc(cite)));
+        const w = await wiktionary(word);
+        return ((w && w.quotes) || []).map((q) => figure(q.text, esc(q.cite)));
+      }).then(guard((items) => group("lit-books", "Quoted in books", items))).catch(() => 0),
       wikiSearch("en.wikiquote.org", word, 10).then(guard((list) => group("lit-writers", "Famous writers", list.map((r) =>
         figure(`…${r.html}…`, `<a href="${r.url}" target="_blank" rel="noopener">${prettyTitle(r.title)}</a>`))))).catch(() => 0),
       wikiSearch("en.wikisource.org", word, 10).then(guard((list) => group("lit-classics", "Classic texts", list.map((r) =>
