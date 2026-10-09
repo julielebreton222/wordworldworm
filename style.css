@@ -294,3 +294,10 @@ a.w:hover { background: var(--mark); }
 .etym-block details { margin: 6px 0 10px; font-size: 16px; color: var(--muted); }
 .etym-block summary { cursor: pointer; font-size: 13px; text-transform: uppercase; letter-spacing: .14em; }
 .etym-block details p { margin-top: 6px; }
+
+/* archives under the library */
+.archive { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 12px; }
+.archive summary { cursor: pointer; font: 600 20px "Cormorant Garamond", serif; }
+.archive summary small { display: block; font: italic 15px "EB Garamond", serif; color: var(--muted); }
+.archive[open] summary { margin-bottom: 12px; }
+.quote figcaption a { white-space: nowrap; }

@@ -306,6 +306,35 @@
     return out.slice(0, 12);
   }
 
+  // ---------- the library: "From writers you love" ----------
+  // data/lib/books.json lists the public-domain books (Project Gutenberg); data/lib/<prefix>.json maps
+  // each word to up to six passages [bookIndex, text, "p" prose | "v" verse], spread across authors.
+  // Rebuild with tools/build_library.py after editing tools/books.py.
+  let libBooks;
+  const libShards = {};
+  const libShard = (w) => (libShards[shardKey(w)] ||= getJSON(`data/lib/${shardKey(w)}.json`).catch(() => ({})));
+
+  async function library(word, lemma) {
+    libBooks ||= getJSON("data/lib/books.json").then((list) =>
+      list.map(([id, author, title, year]) => ({ id, author, title, year })));
+    const books = await libBooks;
+    const forms = [...new Set([word, lemma, word.endsWith("s") ? null : word + "s"].filter(Boolean))];
+    const found = (await Promise.all(forms.map(async (f) => (await libShard(f))[f] || []))).flat();
+    // Up to 8 passages, one per author first, then any others.
+    const items = [], seen = new Set(), authors = new Set();
+    for (const pass of [true, false]) {
+      for (const [bi, text, kind] of found) {
+        const b = books[bi];
+        if (items.length >= 8 || seen.has(text) || (pass && authors.has(b.author))) continue;
+        items.push([b, text, kind]); seen.add(text); authors.add(b.author);
+      }
+    }
+    return { items, forms };
+  }
+
+  const highlightForms = (text, words) => esc(text).replace(
+    new RegExp(`\\b((?:${words.map(reEsc).join("|")})(?:s|es|d|ed|ing)?)\\b`, "gi"), "<mark>$1</mark>");
+
   // ---------- Wikiquote & Wikisource: full-text search ----------
   // Search snippets come back as HTML with the hit wrapped in <span class="searchmatch">.
   function snippetHTML(raw) {
@@ -516,9 +545,13 @@
     })).catch(fail("pair"));
 
     // Literature
-    // Literature: four sources, each filling its own block as it arrives.
-    fill("lit", `<div id="lit-poems"></div><div id="lit-books"></div><div id="lit-writers"></div><div id="lit-classics"></div>
-      <p class="loading" id="lit-loading">Searching the poets and the libraries…</p>`);
+    // Literature: first the curated library, then the older archives, which load only when opened.
+    fill("lit", `<div id="lit-library"><p class="loading">Searching the library…</p></div>
+      <details id="lit-archive" class="archive">
+        <summary>More from the archives <small>older poems you can save and read in full, dictionary quotations, Wikiquote, Wikisource</small></summary>
+        <div id="lit-poems"></div><div id="lit-books"></div><div id="lit-writers"></div><div id="lit-classics"></div>
+        <p class="loading" id="lit-loading">Searching the poets and the libraries…</p>
+      </details>`);
     const group = (id, title, items) => {
       const el = document.getElementById(id);
       if (el && items.length) el.innerHTML = `<div class="lit-group"><h3>${title}</h3><div class="quotes">${items.join("")}</div></div>`;
@@ -526,31 +559,47 @@
     };
     const figure = (body, caption) => `<figure class="quote"><blockquote>${body}</blockquote><figcaption>${caption}</figcaption></figure>`;
     const prettyTitle = (t) => esc(t.replace(/\//g, " · "));
-    Promise.all([
-      poems(word).then(guard((list) => group("lit-poems", "In poems", list.map((p) => {
-        const id = poemId(p);
-        return figure(p.lines.map((l) => `<span>${highlight(l, word)}</span>`).join(""),
-          `${esc(p.author)}, <cite>${esc(p.title)}</cite>
-           <span class="poem-actions">
-             <a href="${poemHref(p, word)}">Read in full →</a>
-             <button type="button" data-save-poem="${esc(id)}" class="${isSaved(id) ? "on" : ""}">${saveLabel(id)}</button>
-           </span>`);
-      })))).catch(() => 0),
-      local.then(async (loc) => {
-        if (loc && loc.q) return loc.q.map(([text, cite]) => figure(highlight(text, loc.word), esc(cite)));
-        const w = await wiktionary(word);
-        return ((w && w.quotes) || []).map((q) => figure(q.text, esc(q.cite)));
-      }).then(guard((items) => group("lit-books", "Quoted in books", items))).catch(() => 0),
-      wikiSearch("en.wikiquote.org", word, 10).then(guard((list) => group("lit-writers", "Famous writers", list.map((r) =>
-        figure(`…${r.html}…`, `<a href="${r.url}" target="_blank" rel="noopener">${prettyTitle(r.title)}</a>`))))).catch(() => 0),
-      wikiSearch("en.wikisource.org", word, 10).then(guard((list) => group("lit-classics", "Classic texts", list.map((r) =>
-        figure(`…${r.html}…`, `<a href="${r.url}" target="_blank" rel="noopener"><cite>${prettyTitle(r.title)}</cite></a>`))))).catch(() => 0),
-    ]).then(guard((counts) => {
-      const loading = document.getElementById("lit-loading");
-      if (!loading) return;
-      if (counts.some(Boolean)) loading.remove();
-      else loading.outerHTML = empty("No literary uses found for this word. Try a related form or a synonym.");
-    }));
+
+    const openArchive = () => { $("#lit-library").innerHTML = ""; $("#lit-archive").open = true; };
+    local.then((loc) => library(word, loc && loc.formOf)).then(guard(({ items, forms }) => {
+      const shown = group("lit-library", "From writers you love", items.map(([b, text, kind]) => figure(
+        kind === "v" ? text.split("\n").map((l) => `<span>${highlightForms(l, forms)}</span>`).join("") : highlightForms(text, forms),
+        `${esc(b.author)}, <cite>${esc(b.title)}</cite> (${b.year}) ·
+         <a href="https://www.gutenberg.org/ebooks/${b.id}" target="_blank" rel="noopener">Read the book →</a>`)));
+      if (!shown) openArchive();
+    })).catch(guard(openArchive));
+
+    let archiveLoaded = false;
+    const loadArchive = () => {
+      if (archiveLoaded) return;
+      archiveLoaded = true;
+      Promise.all([
+        poems(word).then(guard((list) => group("lit-poems", "In poems", list.map((p) => {
+          const id = poemId(p);
+          return figure(p.lines.map((l) => `<span>${highlight(l, word)}</span>`).join(""),
+            `${esc(p.author)}, <cite>${esc(p.title)}</cite>
+             <span class="poem-actions">
+               <a href="${poemHref(p, word)}">Read in full →</a>
+               <button type="button" data-save-poem="${esc(id)}" class="${isSaved(id) ? "on" : ""}">${saveLabel(id)}</button>
+             </span>`);
+        })))).catch(() => 0),
+        local.then(async (loc) => {
+          if (loc && loc.q) return loc.q.map(([text, cite]) => figure(highlight(text, loc.word), esc(cite)));
+          const w = await wiktionary(word);
+          return ((w && w.quotes) || []).map((q) => figure(q.text, esc(q.cite)));
+        }).then(guard((items) => group("lit-books", "Quoted in books", items))).catch(() => 0),
+        wikiSearch("en.wikiquote.org", word, 10).then(guard((list) => group("lit-writers", "Famous writers", list.map((r) =>
+          figure(`…${r.html}…`, `<a href="${r.url}" target="_blank" rel="noopener">${prettyTitle(r.title)}</a>`))))).catch(() => 0),
+        wikiSearch("en.wikisource.org", word, 10).then(guard((list) => group("lit-classics", "Classic texts", list.map((r) =>
+          figure(`…${r.html}…`, `<a href="${r.url}" target="_blank" rel="noopener"><cite>${prettyTitle(r.title)}</cite></a>`))))).catch(() => 0),
+      ]).then(guard((counts) => {
+        const loading = document.getElementById("lit-loading");
+        if (!loading) return;
+        if (counts.some(Boolean)) loading.remove();
+        else loading.outerHTML = empty("No literary uses found for this word. Try a related form or a synonym.");
+      }));
+    };
+    $("#lit-archive").addEventListener("toggle", () => { if ($("#lit-archive").open) loadArchive(); });
 
     // Practice line
     const existing = store.get("journal", {})[word];

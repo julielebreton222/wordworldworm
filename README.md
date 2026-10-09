@@ -8,11 +8,11 @@ A word companion for writing poetry and more beautiful prose. Look up any word a
 - **Rhymes**: perfect and near/slant rhymes, **grouped by number of syllables**
 - **Synonyms** and words close in meaning, plus **antonyms**
 - **Pairings**: the adjectives writers use with a noun ("pale ember", "dying ember") and the nouns an adjective describes
-- **In literature**: the word in use, from four places:
-  - **In poems**: lines from public-domain poems (also matching *embers*, *wandered*…). Tap **Read in full →** to open the whole poem, or **☆ Save poem** to keep it
-  - **Quoted in books**: dated quotations from Wiktionary
-  - **Famous writers**: quotations from Wikiquote
-  - **Classic texts**: public-domain books and poems on Wikisource
+- **In literature**: the word in use.
+  - **From writers you love**: passages from a hand-picked library of 81 free, public-domain books
+    (see below), spread across as many different writers as possible, each with a link to read the book
+  - **More from the archives** (folded away, loads when opened): older poems you can **save** and
+    **read in full**, dated dictionary quotations, Wikiquote and Wikisource
 - **Make it yours**: write a line with the word; it goes into your **Journal** with the saved word
 
 Also: a word of the day, a *Surprise me* button, and every word on every page is a link.
@@ -33,6 +33,28 @@ Mary Oliver and Dickinson. For each passage you can:
 
 Excerpts from books still under copyright are kept to a line or two. The starter passages
 live in **`passages.js`**; add more there, or in the app.
+
+## The library
+
+"From writers you love" draws on complete books that are free to share, weighted toward women and
+writers of color: early Hemingway (*The Sun Also Rises*, *A Farewell to Arms*, *In Our Time*,
+*Men Without Women*), Virginia Woolf, Katherine Mansfield, Zora Neale Hurston, Jean Toomer,
+Langston Hughes, Countee Cullen, Claude McKay, Wallace Thurman, Eric Walrond, Jessie Redmon Fauset,
+Alice Dunbar-Nelson, Zitkála-Šá, Sui Sin Far, Sarojini Naidu, Tagore, Kahlil Gibran, Edna St. Vincent
+Millay, Sara Teasdale, Emily Dickinson, H.D., Marianne Moore, Dorothy Parker, Gertrude Stein, Djuna
+Barnes, Jean Rhys, Kate Chopin, Edith Wharton, Willa Cather, Emily Brontë, Mary Shelley and more.
+The full list is in `tools/books.py`.
+
+Writers still under copyright (Plath, Lispector, Morrison, Nabokov, McCarthy, Anne Carson, Madeline
+Cash) can't be bundled. Add passages you love from them in the **Inspiration** tab.
+
+Introductions and notes written by editors or translators are cut out so every passage is the
+author's own words.
+
+## Rebuilding the data
+
+The scripts in `tools/` regenerate `data/w/` (dictionary) and `data/lib/` (library); each file
+explains how to run it. To add a book to the library, add its Project Gutenberg id to `tools/books.py`.
 
 ## Where your writing lives
 
@@ -60,5 +82,6 @@ folder `/ (root)`), open the link, and use "Add to Home Screen". It installs as 
   (CC BY-SA 4.0). Inflected forms point to their base word (*embers* → *ember*). It ships with the
   app, so origins load instantly and never hit Wiktionary's rate limits
 - [Wiktionary](https://en.wiktionary.org) live: fallback for words the bundle lacks
+- [Project Gutenberg](https://www.gutenberg.org): the books in the library
 - [PoetryDB](https://poetrydb.org): public-domain poems, in full
 - [Wikiquote](https://en.wikiquote.org) and [Wikisource](https://en.wikisource.org): quotations and classic texts
