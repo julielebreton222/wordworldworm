@@ -28,8 +28,9 @@ Mary Oliver and Dickinson. For each passage you can:
 - **✎ Write back**: attach your own writing in answer to it (filter by *With my writing*)
 - tap any word in it to open that word's page
 - **+ Add a passage** of your own from any book you're reading
-- **📜 Saved poems**: poems you saved show up here too, with a link to read them whole, and you can
-  love, annotate and write back to them like any passage
+- **🔖 Saved**: every poem and passage you save from a word page (tap **☆ Save**) lands here, with
+  a link to read the whole poem or book. You can love, annotate and write back to them like any
+  passage. The Journal drawer links here too
 
 Excerpts from books still under copyright are kept to a line or two. The starter passages
 live in **`passages.js`**; add more there, or in the app.

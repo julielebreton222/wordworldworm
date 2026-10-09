@@ -229,10 +229,67 @@
     });
   }
 
+  // Library passages can be saved too: "quill:quotes" = { id: { author, work, year, text, url, savedAt } }.
+  const quoteCache = {};
+  const quoteId = (text) => {
+    let h = 0;
+    for (const c of text) h = (h * 31 + c.codePointAt(0)) | 0;
+    return "quote:" + (h >>> 0).toString(36);
+  };
+  const isQuoteSaved = (id) => !!store.get("quotes", {})[id];
+  const quoteLabel = (id) => (isQuoteSaved(id) ? "★ Saved" : "☆ Save");
+
+  function toggleSaveQuote(id) {
+    const saved = store.get("quotes", {});
+    if (saved[id]) {
+      const notes = (loadInspo().notes[id] || []).length;
+      if (notes && !confirm("Unsave this passage? Your notes and writing on it will be hidden until you save it again.")) return;
+      delete saved[id];
+    } else {
+      if (!quoteCache[id]) return;
+      saved[id] = { ...quoteCache[id], savedAt: Date.now() };
+    }
+    store.set("quotes", saved);
+    document.querySelectorAll(`[data-save-quote="${CSS.escape(id)}"]`).forEach((b) => {
+      b.textContent = quoteLabel(id);
+      b.classList.toggle("on", isQuoteSaved(id));
+    });
+  }
+
+  // A small note that says where saved things went.
+  let toastTimer;
+  function toast(html) {
+    let el = $("#toast");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "toast";
+      el.setAttribute("role", "status");
+      document.body.appendChild(el);
+    }
+    el.innerHTML = html;
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove("show"), 3500);
+  }
+  const savedToast = () => toast(`Saved to <a href="#inspiration" data-open-saved>Inspiration → 🔖 Saved</a>`);
+
   document.addEventListener("click", (e) => {
+    if (e.target.closest("[data-open-saved]")) {
+      inspoState.filter = "saved"; inspoState.author = "";
+      $("#journal").hidden = true;
+      if (location.hash === "#inspiration") renderInspiration(); // no hashchange when already there
+    }
+    const q = e.target.closest("[data-save-quote]");
+    if (q) {
+      toggleSaveQuote(q.dataset.saveQuote);
+      if (isQuoteSaved(q.dataset.saveQuote)) savedToast();
+      if (location.hash === "#inspiration" && q.closest(".passage")) renderInspiration();
+      return;
+    }
     const b = e.target.closest("[data-save-poem]");
     if (!b) return;
     toggleSavePoem(b.dataset.savePoem);
+    if (isSaved(b.dataset.savePoem)) savedToast();
     if (location.hash === "#inspiration" && b.closest(".passage")) renderInspiration();
   });
 
@@ -562,10 +619,18 @@
 
     const openArchive = () => { $("#lit-library").innerHTML = ""; $("#lit-archive").open = true; };
     local.then((loc) => library(word, loc && loc.formOf)).then(guard(({ items, forms }) => {
-      const shown = group("lit-library", "From writers you love", items.map(([b, text, kind]) => figure(
-        kind === "v" ? text.split("\n").map((l) => `<span>${highlightForms(l, forms)}</span>`).join("") : highlightForms(text, forms),
-        `${esc(b.author)}, <cite>${esc(b.title)}</cite> (${b.year}) ·
-         <a href="https://www.gutenberg.org/ebooks/${b.id}" target="_blank" rel="noopener">Read the book →</a>`)));
+      const shown = group("lit-library", "From writers you love", items.map(([b, text, kind]) => {
+        const id = quoteId(text);
+        const url = `https://www.gutenberg.org/ebooks/${b.id}`;
+        quoteCache[id] = { author: b.author, work: b.title, year: b.year, text, url };
+        return figure(
+          kind === "v" ? text.split("\n").map((l) => `<span>${highlightForms(l, forms)}</span>`).join("") : highlightForms(text, forms),
+          `${esc(b.author)}, <cite>${esc(b.title)}</cite> (${b.year})
+           <span class="poem-actions">
+             <a href="${url}" target="_blank" rel="noopener">Read the book →</a>
+             <button type="button" data-save-quote="${esc(id)}" class="${isQuoteSaved(id) ? "on" : ""}">${quoteLabel(id)}</button>
+           </span>`);
+      }));
       if (!shown) openArchive();
     })).catch(guard(openArchive));
 
@@ -693,6 +758,8 @@
   function renderJournal() {
     const j = store.get("journal", {});
     const entries = Object.entries(j).sort((a, b) => b[1].added - a[1].added);
+    const n = savedCount();
+    $("#journal-saved").innerHTML = `<a href="#inspiration" data-open-saved>🔖 Saved poems &amp; passages${n ? ` (${n})` : ""} →</a>`;
     $("#journal-list").innerHTML = entries.length
       ? entries.map(([w, e]) => `
           <div class="entry">
@@ -731,7 +798,7 @@
     document.title = "Inspiration · Word World";
     $("#q").value = "";
     const data = loadInspo();
-    const all = [...data.added.map((p) => ({ ...p, mine: true })), ...savedPoemPassages(), ...window.QUILL_PASSAGES];
+    const all = [...data.added.map((p) => ({ ...p, mine: true })), ...savedItems(), ...window.QUILL_PASSAGES];
     const authors = [...new Set(all.map((p) => p.author))].sort((a, b) =>
       a.split(" ").pop().localeCompare(b.split(" ").pop()));
     const f = inspoState.filter;
@@ -740,10 +807,10 @@
       (f === "all" ||
        (f === "liked" && data.liked[p.id]) ||
        (f === "mine" && p.mine) ||
-       (f === "poems" && p.poem) ||
+       (f === "saved" && (p.poem || p.quote)) ||
        (f === "writing" && (data.notes[p.id] || []).length)));
 
-    const filters = [["all", "All"], ["liked", "♥ Loved"], ["writing", "✎ With my writing"], ["poems", "📜 Saved poems"], ["mine", "Added by me"]];
+    const filters = [["all", "All"], ["liked", "♥ Loved"], ["writing", "✎ With my writing"], ["saved", `🔖 Saved${savedCount() ? ` (${savedCount()})` : ""}`], ["mine", "Added by me"]];
     app.innerHTML = `
       <section class="hero small">
         <p class="eyebrow">Inspiration</p>
@@ -774,7 +841,7 @@
         ${shown.length ? shown.map((p) => passageCard(p, data)).join("") :
           empty(f === "liked" ? "Nothing loved yet. Tap ♡ on a passage that stops you." :
                 f === "writing" ? "You haven't written back to any passage yet." :
-                f === "poems" ? "No saved poems yet. Look up a word, then tap “☆ Save poem” under any poem in the In literature section." :
+                f === "saved" ? "Nothing saved yet. On any word’s page, tap “☆ Save” under a passage in In literature, or “☆ Save poem” under a poem in the archives." :
                 f === "mine" ? "Add a passage from a book you love with “+ Add a passage”." : "No passages.")}
       </div>`;
 
@@ -800,11 +867,21 @@
   }
 
   // Saved poems appear in Inspiration as their opening lines, with a link to read them whole.
+  const savedCount = () => Object.keys(store.get("poems", {})).length + Object.keys(store.get("quotes", {})).length;
+
+  // Saved poems and saved library passages, newest first.
+  function savedItems() {
+    const quotes = Object.entries(store.get("quotes", {})).map(([id, q]) =>
+      ({ id, author: q.author, work: q.work, year: q.year, text: q.text, quote: q, at: q.savedAt }));
+    const poems = savedPoemPassages().map((p) => ({ ...p, at: p.poem.savedAt }));
+    return [...quotes, ...poems].sort((a, b) => b.at - a.at);
+  }
+
   function savedPoemPassages() {
     return Object.entries(store.get("poems", {}))
       .sort((a, b) => b[1].savedAt - a[1].savedAt)
       .map(([id, poem]) => {
-        const lines = poem.lines.filter((l) => l.trim());
+        const lines = poem.lines.filter((l) => l.trim() && l !== l.toUpperCase()); // skip headings in the preview
         const opening = lines.slice(0, 6).join("\n") + (lines.length > 6 ? "\n…" : "");
         return { id, author: poem.author, work: poem.title, text: opening, poem };
       });
@@ -825,6 +902,8 @@
           ${p.mine ? `<button type="button" data-act="remove" class="quiet">Remove</button>` : ""}
           ${p.poem ? `<a class="read-full" href="${poemHref(p.poem)}">Read the whole poem →</a>
             <button type="button" class="quiet" data-save-poem="${esc(p.id)}">★ Saved</button>` : ""}
+          ${p.quote ? `<a class="read-full" href="${esc(p.quote.url)}" target="_blank" rel="noopener">Read the book →</a>
+            <button type="button" class="quiet" data-save-quote="${esc(p.id)}">★ Saved</button>` : ""}
         </div>
         ${composing ? `
           <div class="composer">
@@ -893,7 +972,7 @@
     const id = card.dataset.id;
     const p = data.added.find((x) => x.id === id);
     const passage = p ? { ...p, mine: true } :
-      savedPoemPassages().find((x) => x.id === id) || window.QUILL_PASSAGES.find((x) => x.id === id);
+      savedItems().find((x) => x.id === id) || window.QUILL_PASSAGES.find((x) => x.id === id);
     card.outerHTML = passageCard(passage, data);
   }
 
