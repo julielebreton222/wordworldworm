@@ -1106,6 +1106,27 @@
 
   const STEPS = [
     {
+      title: "Name the feeling", minutes: 5,
+      who: "Audre Lorde, Poetry Is Not a Luxury",
+      why: "Lorde wrote that poetry is how we give names to feelings that don’t have names yet. Before fixing any words, find the feeling the words were reaching for.",
+      todo: ["Read your draft once, slowly.", "Answer the three questions below. Short answers are best: you'll carry them into a blank page next."],
+      tool: "feeling",
+    },
+    {
+      title: "Rewrite from scratch", minutes: 10,
+      who: "William Wordsworth · Natalie Goldberg, Writing Down the Bones",
+      why: "Your first draft was how you found the feeling. Now that you know it, write the poem again from the feeling, not from the old words, so the old words can’t steer you. Whatever you remember without looking was alive; whatever you forget probably wasn’t needed. Wordsworth called poetry “emotion recollected in tranquillity.” Goldberg’s rules for this kind of writing: keep your hand moving, don’t cross out, don’t think.",
+      todo: ["Your old draft is hidden. Only the feeling is here.", "Write the whole thing again, without stopping, for about 10 minutes. Messy is fine.", "Stuck? Start with “It felt like…” and keep going."],
+      tool: "rewrite",
+    },
+    {
+      title: "Turn the lens", minutes: 10, optional: true,
+      who: "Ursula K. Le Guin, Steering the Craft",
+      why: "Le Guin had writers tell the same story from different points of view, because each one shows something the others hide. Moving the camera can make a familiar feeling strange and new again.",
+      todo: ["Pick one lens below and rewrite a few lines (or all of it) through it.", "Keep anything that surprises you: paste it into your draft with ✎ Edit, or replace the draft if the new version is better.", "Optional: skip if your rewrite already feels right."],
+      tool: "lens",
+    },
+    {
       title: "Hear it", minutes: 5,
       who: "Ursula K. Le Guin, Steering the Craft",
       why: "Le Guin taught that the sound of writing is where it lives: read it out loud and your ear catches what your eye skims over.",
@@ -1120,9 +1141,9 @@
       tool: "heart",
     },
     {
-      title: "Cut 10%", minutes: 10,
+      title: "Cut 20%", minutes: 10,
       who: "Stephen King, On Writing · George Orwell",
-      why: "King’s rule of thumb: second draft = first draft minus 10%. Orwell: “If it is possible to cut a word out, always cut it out.”",
+      why: "King’s rule of thumb is second draft = first draft minus 10%. A poem can go further: aim for a fifth. Orwell: “If it is possible to cut a word out, always cut it out.”",
       todo: ["Highlighted words are often filler. Delete the ones the poem doesn't miss.", "Aim for the target word count. Tap ✎ Edit to change the poem."],
       tool: "cut",
     },
@@ -1177,7 +1198,8 @@
     },
   ];
 
-  const wsLoad = () => store.get("workshop", []);
+  // Drafts made before the three opening steps existed move forward three steps.
+  const wsLoad = () => store.get("workshop", []).map((p) => (p.v2 ? p : { ...p, v2: true, step: p.step > 0 ? p.step + 3 : 0 }));
   const wsSave = (list) => store.set("workshop", list);
   const wsGet = (id) => wsLoad().find((p) => p.id === id);
   function wsUpdate(id, fn) {
@@ -1198,7 +1220,7 @@
       <section class="hero small">
         <p class="eyebrow">Workshop</p>
         <h1>Make it better, one step at a time</h1>
-        <p class="lede">Ten short steps from writers who teach. One at a time, about 5–10 minutes each.
+        <p class="lede">Thirteen short steps from writers who teach, starting with the feeling. One at a time, about 5–10 minutes each.
         Skip any step, stop anytime: it saves as you go. Tip from Stephen King: let a draft rest
         at least a night first, so you read it like a stranger.</p>
       </section>
@@ -1219,7 +1241,7 @@
       const id = Date.now().toString(36);
       const list = wsLoad();
       list.push({ id, title: $("#ws-title").value.trim(), text, original: text, step: 0, flags: [], heart: null,
-        versions: [{ at: Date.now(), text, label: "First draft" }], updatedAt: Date.now() });
+        versions: [{ at: Date.now(), text, label: "First draft" }], updatedAt: Date.now(), v2: true });
       wsSave(list);
       location.hash = "#workshop/" + encodeURIComponent(id);
     });
@@ -1228,7 +1250,7 @@
   let wsEditing = false, wsTimer = null, wsHide = null;
 
   function renderWorkshop(id) {
-    const p = wsGet(id);
+    let p = wsGet(id);
     if (!p) { location.hash = "#workshop"; return; }
     document.title = `${p.title || "Draft"} · Workshop · Word World`;
     const n = Math.min(p.step, STEPS.length - 1);
@@ -1241,8 +1263,10 @@
         <p class="back"><a href="#workshop">← All drafts</a></p>
         <div class="ws-progress" aria-label="Step ${n + 1} of ${STEPS.length}">${STEPS.map((x, i) =>
           `<button type="button" data-goto="${i}" class="${i < p.step ? "done" : ""} ${i === n ? "now" : ""}" title="${esc(x.title)}"></button>`).join("")}</div>
+        ${p.feeling && s.tool !== "feeling" ? `<p class="feeling-banner">The feeling: <strong>${esc(p.feeling)}</strong>${
+          p.feelBody ? ` · in my ${esc(p.feelBody)}` : ""}${p.feelImage ? ` · like ${esc(p.feelImage)}` : ""}</p>` : ""}
         <section class="card ws-step">
-          <p class="eyebrow">Step ${n + 1} of ${STEPS.length} · about ${s.minutes} min${done ? " · finished ✓" : ""}</p>
+          <p class="eyebrow">Step ${n + 1} of ${STEPS.length} · about ${s.minutes} min${s.optional ? " · optional" : ""}${done ? " · finished ✓" : ""}</p>
           <h2>${esc(s.title)}</h2>
           <p class="why">${esc(s.why)}${s.who ? ` <span class="who">— ${esc(s.who)}</span>` : ""}</p>
           <ol class="todo">${s.todo.map((t) => `<li>${esc(t)}</li>`).join("")}</ol>
@@ -1254,7 +1278,7 @@
             <button type="button" id="ws-next">${n === STEPS.length - 1 ? "Finish ✓" : "Done, next →"}</button>
           </div>
         </section>
-        <section class="card ws-poem">
+        <section class="card ws-poem" ${s.tool === "rewrite" ? "hidden" : ""}>
           <div class="ws-poem-head">
             <h2>${esc(p.title || "Your draft")}</h2>
             <span class="muted">${words} words${originalWords !== words ? ` (was ${originalWords})` : ""}</span>
@@ -1336,14 +1360,64 @@
       $("#ws-play").addEventListener("click", () => speak(p.text));
       $("#ws-stop").addEventListener("click", () => speechSynthesis.cancel());
     }
+    if (s.tool === "feeling") {
+      tool.innerHTML = `<div class="feel-form">
+          <label>The feeling, in one word<input id="f-word" value="${esc(p.feeling || "")}" placeholder="longing, relief, shame, tenderness…"></label>
+          <label>Where do you feel it in your body?<input id="f-body" value="${esc(p.feelBody || "")}" placeholder="throat, chest, hands…"></label>
+          <label>If it were an object, what would it be?<input id="f-image" value="${esc(p.feelImage || "")}" placeholder="a cold cup of tea, a key that doesn’t fit…"></label>
+        </div>`;
+      const bind = (sel, key) => $(sel).addEventListener("input", (e) => wsUpdate(id, (x) => { x[key] = e.target.value.trim(); }));
+      bind("#f-word", "feeling"); bind("#f-body", "feelBody"); bind("#f-image", "feelImage");
+      $("#f-word").focus();
+    }
+    if (s.tool === "rewrite") {
+      tool.innerHTML = `
+        <textarea id="rw-area" class="blank-page" rows="14" placeholder="${p.feeling ? `It felt like ${esc(p.feeling)}…` : "It felt like…"}">${esc(p.rewrite || "")}</textarea>
+        <p class="muted" id="rw-count">${wordCount(p.rewrite || "")} words · saves as you type. “Done” makes this your new draft (the old one stays in your history).</p>
+        <details class="peek"><summary>Really stuck? Peek at the old draft</summary><pre>${esc(p.text)}</pre></details>`;
+      const ta = $("#rw-area");
+      ta.focus();
+      ta.addEventListener("input", () => {
+        wsUpdate(id, (x) => { x.rewrite = ta.value; });
+        $("#rw-count").firstChild.textContent = `${wordCount(ta.value)} words · saves as you type. “Done” makes this your new draft (the old one stays in your history).`;
+      });
+    }
+    if (s.tool === "lens") {
+      const LENSES = [
+        ["she", "Write yourself as “she” or “he”, from a little distance"],
+        ["you", "Speak to someone directly, as “you”"],
+        ["object", "Let an object in the scene tell it"],
+        ["later", "Tell it from ten years from now"],
+      ];
+      tool.innerHTML = `
+        <div class="chips lens">${LENSES.map(([k, label]) => `<button type="button" data-lens="${k}" class="${p.lensKind === k ? "on" : ""}">${esc(label)}</button>`).join("")}</div>
+        <textarea id="lens-area" class="blank-page" rows="8" placeholder="Try a few lines through the lens…">${esc(p.lens || "")}</textarea>
+        <div class="row"><button type="button" class="ghost small" id="lens-use">Replace my draft with this</button>
+          <span class="muted">or copy the lines you like into your draft below with ✎ Edit.</span></div>`;
+      tool.querySelectorAll("[data-lens]").forEach((b) => b.addEventListener("click", () => {
+        wsUpdate(id, (x) => { x.lensKind = b.dataset.lens; });
+        tool.querySelectorAll("[data-lens]").forEach((o) => o.classList.toggle("on", o === b));
+        $("#lens-area").focus();
+      }));
+      $("#lens-area").addEventListener("input", (e) => wsUpdate(id, (x) => { x.lens = e.target.value; }));
+      $("#lens-use").addEventListener("click", () => {
+        const text = $("#lens-area").value.replace(/\s+$/, "");
+        if (!text.trim()) return;
+        wsUpdate(id, (x) => { x.versions.push({ at: Date.now(), text: x.text, label: "Before “Turn the lens”" }); x.text = text; });
+        toast("Your draft is now the new version.");
+        renderWorkshop(id);
+      });
+    }
     if (s.tool === "heart") {
       tool.innerHTML = p.heart != null
         ? `<p class="heart-line">♥ ${esc(lines[p.heart] || "")}</p><p class="muted">Every other line should earn its place next to this one.</p>`
         : `<p class="muted">Tap a line in your draft below.</p>`;
     }
     if (s.tool === "cut") {
-      const target = Math.round(originalWords * 0.9);
-      tool.innerHTML = `<div class="meter-bar"><div style="width:${Math.min(100, Math.round((words / originalWords) * 100))}%"></div></div>
+      if (!p.cutBase) p = wsUpdate(id, (x) => { x.cutBase = wordCount(x.text); });
+      const base = p.cutBase;
+      const target = Math.round(base * 0.8);
+      tool.innerHTML = `<div class="meter-bar"><div style="width:${Math.min(100, Math.round((words / base) * 100))}%"></div></div>
         <p class="muted">${words} words now · target ≈ ${target} ${words <= target ? "· ✓ you did it" : `· ${words - target} to go`}</p>`;
     }
     if (s.tool === "abstract" || s.tool === "verbs" || s.tool === "cliche") {
@@ -1408,7 +1482,15 @@
       renderWorkshop(id);
       window.scrollTo(0, 0);
     };
-    $("#ws-next").addEventListener("click", () => go(n + 1, true));
+    $("#ws-next").addEventListener("click", () => {
+      if (s.tool === "rewrite" && (p = wsGet(id)).rewrite && p.rewrite.trim() && p.rewrite !== p.text) {
+        wsUpdate(id, (x) => {
+          x.versions.push({ at: Date.now(), text: x.text, label: "Before the rewrite" });
+          x.text = x.rewrite.replace(/\s+$/, "");
+        });
+      }
+      go(n + 1, true);
+    });
     $("#ws-skip").addEventListener("click", () => go(Math.min(n + 1, STEPS.length), false));
     $("#ws-prev").addEventListener("click", () => go(Math.max(0, n - 1), false));
     app.querySelectorAll("[data-goto]").forEach((b) => b.addEventListener("click", () => go(+b.dataset.goto, false)));

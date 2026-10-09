@@ -379,3 +379,27 @@ button.ghost.small { padding: 2px 12px; font-size: 15px; }
 .compare pre { white-space: pre-wrap; font: italic 17px/1.6 "EB Garamond", serif; margin: 0; }
 .next-ideas ul { padding-left: 1.2em; }
 .next-ideas li { margin: 6px 0; }
+
+/* workshop: feeling, blank page, lens */
+.feeling-banner {
+  margin: 0 0 12px; padding: 8px 14px; border-radius: 10px; background: var(--accent-soft);
+  color: var(--accent); font-size: 17px;
+}
+.feel-form { display: grid; gap: 10px; flex-basis: 100%; }
+.feel-form label { display: grid; gap: 4px; font-size: 16px; color: var(--muted); }
+.feel-form input, #lens-area {
+  padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); font-size: 18px;
+}
+.blank-page {
+  flex-basis: 100%; width: 100%; min-height: 50vh; padding: 18px 20px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--bg); font-size: 20px; line-height: 1.7; resize: vertical;
+}
+#lens-area.blank-page { min-height: 12em; }
+.peek { flex-basis: 100%; color: var(--muted); }
+.peek summary { cursor: pointer; font-size: 15px; }
+.peek pre { white-space: pre-wrap; font: italic 16px/1.5 "EB Garamond", serif; opacity: .7; }
+.lens button {
+  border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 4px 12px; font-size: 15px;
+}
+.lens button.on { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.ws-tool .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; flex-basis: 100%; }
