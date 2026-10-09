@@ -389,6 +389,59 @@
     return { items, forms };
   }
 
+  // The writers you love: used to order quotes and for the "See it in their books" searches.
+  const DEFAULT_WRITERS = ["Sylvia Plath", "Clarice Lispector", "Toni Morrison", "Ernest Hemingway",
+    "Vladimir Nabokov", "Cormac McCarthy", "Anne Carson", "Madeline Cash"];
+  const favWriters = () => store.get("writers", DEFAULT_WRITERS);
+  const setFavWriters = (list) => store.set("writers", [...new Set(list)]);
+
+  // Short quotations by writers (from Wikiquote): data/quotes/<prefix>.json = { word: [[authorIndex, text, source]] }.
+  let quoteAuthors;
+  const quoteShards = {};
+  const quoteShard = (w) => (quoteShards[shardKey(w)] ||= getJSON(`data/quotes/${shardKey(w)}.json`).catch(() => ({})));
+
+  async function writerQuotes(forms) {
+    quoteAuthors ||= getJSON("data/quotes/authors.json");
+    const authors = await quoteAuthors;
+    const all = [...forms, ...forms.filter((f) => !f.endsWith("s")).map((f) => f + "s")];
+    const found = (await Promise.all([...new Set(all)].map(async (f) => (await quoteShard(f))[f] || []))).flat()
+      .map(([ai, text, source]) => [authors[ai], text, source]);
+    const fav = favWriters().map((w) => w.toLowerCase());
+    const rank = (a) => { const i = fav.indexOf(a.toLowerCase()); return i === -1 ? 99 : i; };
+    found.sort((a, b) => rank(a[0]) - rank(b[0]));
+    const items = [], seen = new Set(), authorsSeen = new Set();
+    for (const pass of [true, false]) {
+      for (const q of found) {
+        if (items.length >= 6 || seen.has(q[1]) || (pass && authorsSeen.has(q[0]))) continue;
+        items.push(q); seen.add(q[1]); authorsSeen.add(q[0]);
+      }
+    }
+    return items;
+  }
+
+  // Passages in the Inspiration tab that use the word: the starter set, ones you added, and ones you saved.
+  function myPassages(forms) {
+    const re = new RegExp(`\\b(?:${forms.map(reEsc).join("|")})(?:s|es|d|ed|ing)?\\b`, "i");
+    const sources = [
+      ...loadInspo().added,
+      ...savedItems().map((p) => (p.poem ? { ...p, text: p.poem.lines.join("\n") } : p)),
+      ...window.QUILL_PASSAGES,
+    ];
+    const out = [], seen = new Set();
+    for (const p of sources) {
+      if (out.length >= 6 || seen.has(p.id) || !re.test(p.text)) continue;
+      seen.add(p.id);
+      const lines = p.text.split("\n");
+      const i = lines.findIndex((l) => re.test(l));
+      let text = lines.slice(Math.max(0, i - 1), i + 2).join("\n");
+      if (text.length > 420) { // a long prose paragraph: keep just the sentence with the word
+        text = (lines[i].match(/[^.!?]+[.!?]+["”’]?/g) || [lines[i]]).find((x) => re.test(x)).trim();
+      }
+      out.push({ author: p.author, work: p.work, text });
+    }
+    return out;
+  }
+
   const highlightForms = (text, words) => esc(text).replace(
     new RegExp(`\\b((?:${words.map(reEsc).join("|")})(?:s|es|d|ed|ing)?)\\b`, "gi"), "<mark>$1</mark>");
 
@@ -603,7 +656,9 @@
 
     // Literature
     // Literature: first the curated library, then the older archives, which load only when opened.
-    fill("lit", `<div id="lit-library"><p class="loading">Searching the library…</p></div>
+    fill("lit", `<div id="lit-mine"></div><div id="lit-quotes"></div>
+      <div id="lit-library"><p class="loading">Searching the library…</p></div>
+      <div id="lit-search"></div>
       <details id="lit-archive" class="archive">
         <summary>More from the archives <small>older poems you can save and read in full, dictionary quotations, Wikiquote, Wikisource</small></summary>
         <div id="lit-poems"></div><div id="lit-books"></div><div id="lit-writers"></div><div id="lit-classics"></div>
@@ -617,22 +672,65 @@
     const figure = (body, caption) => `<figure class="quote"><blockquote>${body}</blockquote><figcaption>${caption}</figcaption></figure>`;
     const prettyTitle = (t) => esc(t.replace(/\//g, " · "));
 
-    const openArchive = () => { $("#lit-library").innerHTML = ""; $("#lit-archive").open = true; };
-    local.then((loc) => library(word, loc && loc.formOf)).then(guard(({ items, forms }) => {
-      const shown = group("lit-library", "From writers you love", items.map(([b, text, kind]) => {
+    const saveBtn = (id) =>
+      `<button type="button" data-save-quote="${esc(id)}" class="${isQuoteSaved(id) ? "on" : ""}">${quoteLabel(id)}</button>`;
+    const asVerse = (text, forms) => text.split("\n").map((l) => `<span>${highlightForms(l, forms)}</span>`).join("");
+    // Open the archives by themselves only when none of the first three sources has anything.
+    let found = 0, pending = 3;
+    const settle = (n) => { found += n || 0; if (--pending === 0 && !found) $("#lit-archive").open = true; };
+
+    local.then((loc) => {
+      const forms = [...new Set([word, loc && loc.formOf].filter(Boolean))];
+
+      // 1. Passages already in the Inspiration tab (yours, saved, and the starter set).
+      settle(group("lit-mine", "Your passages", myPassages(forms).map((p) => figure(asVerse(p.text, forms),
+        `${esc(p.author)}${p.work ? `, <cite>${esc(p.work)}</cite>` : ""} · <a href="#inspiration">in Inspiration</a>`))));
+
+      // 2. Short quotations from your writers (Wikiquote), favourites first.
+      writerQuotes(forms).then(guard((items) => settle(group("lit-quotes", "Your writers", items.map(([author, text, source]) => {
+        const id = quoteId(text);
+        const url = `https://en.wikiquote.org/wiki/${encodeURIComponent(author.replace(/ /g, "_"))}`;
+        quoteCache[id] = { author, work: source, text, url, linkLabel: "More on Wikiquote →" };
+        return figure(asVerse(text, forms),
+          `${esc(author)}${source ? `, <cite>${esc(source)}</cite>` : ""}
+           <span class="poem-actions"><a href="${url}" target="_blank" rel="noopener">More on Wikiquote →</a>${saveBtn(id)}</span>`);
+      }))))).catch(() => settle(0));
+
+      // 3. The free library (whole public-domain books).
+      return library(word, loc && loc.formOf);
+    }).then(guard(({ items, forms }) => {
+      const n = group("lit-library", "From the library", items.map(([b, text, kind]) => {
         const id = quoteId(text);
         const url = `https://www.gutenberg.org/ebooks/${b.id}`;
         quoteCache[id] = { author: b.author, work: b.title, year: b.year, text, url };
-        return figure(
-          kind === "v" ? text.split("\n").map((l) => `<span>${highlightForms(l, forms)}</span>`).join("") : highlightForms(text, forms),
+        return figure(kind === "v" ? asVerse(text, forms) : highlightForms(text, forms),
           `${esc(b.author)}, <cite>${esc(b.title)}</cite> (${b.year})
-           <span class="poem-actions">
-             <a href="${url}" target="_blank" rel="noopener">Read the book →</a>
-             <button type="button" data-save-quote="${esc(id)}" class="${isQuoteSaved(id) ? "on" : ""}">${quoteLabel(id)}</button>
-           </span>`);
+           <span class="poem-actions"><a href="${url}" target="_blank" rel="noopener">Read the book →</a>${saveBtn(id)}</span>`);
       }));
-      if (!shown) openArchive();
-    })).catch(guard(openArchive));
+      if (!n) $("#lit-library").innerHTML = "";
+      settle(n);
+    })).catch(guard(() => { $("#lit-library").innerHTML = ""; settle(0); }));
+
+    // 4. One-tap searches inside each favourite writer's real books.
+    const drawSearch = () => {
+      const el = document.getElementById("lit-search");
+      if (!el) return;
+      el.innerHTML = `<div class="lit-group"><h3>See it in their books</h3>
+        <p class="hint">Opens Google Books searching for “${esc(word)}” inside each writer’s books, with real sentences in context.</p>
+        <div class="chips writers">${favWriters().map((w) => `<span class="writer">
+            <a class="chip" target="_blank" rel="noopener"
+               href="https://www.google.com/search?tbm=bks&q=${encodeURIComponent(`"${word}" inauthor:"${w}"`)}">${esc(w)} ↗</a>
+            <button type="button" class="quiet" data-remove-writer="${esc(w)}" aria-label="Remove ${esc(w)}">×</button></span>`).join("")}
+          <button type="button" class="ghost small" id="add-writer">+ Add a writer</button></div></div>`;
+      $("#add-writer").addEventListener("click", () => {
+        const name = (prompt("Writer’s name, as it appears on their books:") || "").trim();
+        if (name) { setFavWriters([...favWriters(), name]); drawSearch(); }
+      });
+      el.querySelectorAll("[data-remove-writer]").forEach((b) => b.addEventListener("click", () => {
+        setFavWriters(favWriters().filter((w) => w !== b.dataset.removeWriter)); drawSearch();
+      }));
+    };
+    drawSearch();
 
     let archiveLoaded = false;
     const loadArchive = () => {
@@ -902,7 +1000,7 @@
           ${p.mine ? `<button type="button" data-act="remove" class="quiet">Remove</button>` : ""}
           ${p.poem ? `<a class="read-full" href="${poemHref(p.poem)}">Read the whole poem →</a>
             <button type="button" class="quiet" data-save-poem="${esc(p.id)}">★ Saved</button>` : ""}
-          ${p.quote ? `<a class="read-full" href="${esc(p.quote.url)}" target="_blank" rel="noopener">Read the book →</a>
+          ${p.quote ? `<a class="read-full" href="${esc(p.quote.url)}" target="_blank" rel="noopener">${esc(p.quote.linkLabel || "Read the book →")}</a>
             <button type="button" class="quiet" data-save-quote="${esc(p.id)}">★ Saved</button>` : ""}
         </div>
         ${composing ? `

@@ -8,11 +8,16 @@ A word companion for writing poetry and more beautiful prose. Look up any word a
 - **Rhymes**: perfect and near/slant rhymes, **grouped by number of syllables**
 - **Synonyms** and words close in meaning, plus **antonyms**
 - **Pairings**: the adjectives writers use with a noun ("pale ember", "dying ember") and the nouns an adjective describes
-- **In literature**: the word in use.
-  - **From writers you love**: passages from a hand-picked library of 81 free, public-domain books
-    (see below), spread across as many different writers as possible, each with a link to read the book
-  - **More from the archives** (folded away, loads when opened): older poems you can **save** and
-    **read in full**, dated dictionary quotations, Wikiquote and Wikisource
+- **In literature**: the word in use, in this order:
+  - **Your passages**: anything in your Inspiration tab that uses the word
+  - **Your writers**: short quotations from 47 writers (Plath, Lispector, Morrison, Hemingway, Nabokov,
+    McCarthy, Carson, Baldwin, Didion, Woolf, Lorde, Adichie, Le Guin, Pessoa…), from Wikiquote,
+    with your favourites first
+  - **From the library**: passages from 81 free, public-domain books (see below)
+  - **See it in their books**: one tap searches Google Books for the word inside each favourite
+    writer's books. Add or remove writers right there
+  - **More from the archives** (folded away): older poems you can save and read in full, dictionary
+    quotations, Wikisource
 - **Make it yours**: write a line with the word; it goes into your **Journal** with the saved word
 
 Also: a word of the day, a *Surprise me* button, and every word on every page is a link.
@@ -47,14 +52,15 @@ Barnes, Jean Rhys, Kate Chopin, Edith Wharton, Willa Cather, Emily Brontë, Mary
 The full list is in `tools/books.py`.
 
 Writers still under copyright (Plath, Lispector, Morrison, Nabokov, McCarthy, Anne Carson, Madeline
-Cash) can't be bundled. Add passages you love from them in the **Inspiration** tab.
+Cash) can't be bundled as whole books. They appear through short, sourced Wikiquote quotations, the
+"See it in their books" searches, and any passages you add in the **Inspiration** tab.
 
 Introductions and notes written by editors or translators are cut out so every passage is the
 author's own words.
 
 ## Rebuilding the data
 
-The scripts in `tools/` regenerate `data/w/` (dictionary) and `data/lib/` (library); each file
+The scripts in `tools/` regenerate `data/w/` (dictionary), `data/lib/` (library) and `data/quotes/` (quotations); each file
 explains how to run it. To add a book to the library, add its Project Gutenberg id to `tools/books.py`.
 
 ## Where your writing lives
@@ -84,5 +90,6 @@ folder `/ (root)`), open the link, and use "Add to Home Screen". It installs as 
   app, so origins load instantly and never hit Wiktionary's rate limits
 - [Wiktionary](https://en.wiktionary.org) live: fallback for words the bundle lacks
 - [Project Gutenberg](https://www.gutenberg.org): the books in the library
+- [Wikiquote](https://en.wikiquote.org) (CC BY-SA 4.0): writers' quotations, bundled in `data/quotes/`
 - [PoetryDB](https://poetrydb.org): public-domain poems, in full
 - [Wikiquote](https://en.wikiquote.org) and [Wikisource](https://en.wikisource.org): quotations and classic texts

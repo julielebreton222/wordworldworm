@@ -313,3 +313,9 @@ a.w:hover { background: var(--mark); }
 #toast a { color: var(--gold); }
 .poem-actions button[data-save-quote].on { border-color: var(--gold); color: var(--gold); }
 .journal-saved a { font-size: 17px; text-decoration: none; }
+
+/* "See it in their books" */
+.writers { align-items: center; }
+.writer { display: inline-flex; align-items: center; }
+.writer button { padding: 0 4px; font-size: 16px; }
+button.ghost.small { padding: 2px 12px; font-size: 15px; }
