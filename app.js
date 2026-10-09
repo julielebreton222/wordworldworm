@@ -1074,6 +1074,359 @@
     card.outerHTML = passageCard(passage, data);
   }
 
+  // ---------- workshop: step-by-step editing ----------
+  // Saved under "quill:workshop" as [{ id, title, text, original, step, flags: [lineIndex], heart, versions, updatedAt }].
+  // One small step on screen at a time; every step can be skipped; everything saves as you go.
+  const FILLER = new Set(("very really just quite rather somewhat actually basically simply truly totally completely " +
+    "literally definitely certainly perhaps maybe suddenly finally that so even still all some things thing stuff kind sort " +
+    "seem seemed seems feel felt feels started began begin").split(" "));
+  const ABSTRACT = new Set(("love loved pain soul souls heart hearts beauty beautiful sadness sad happiness happy joy " +
+    "emotion emotions feeling feelings life time forever eternity eternal dream dreams hope hopes fear fears truth " +
+    "freedom peace hate hatred loneliness lonely despair grief sorrow memory memories passion desire spirit nothing " +
+    "everything something world existence reality darkness light infinite destiny fate").split(" "));
+  const CLICHES = ["broken heart", "heart of gold", "tears fell", "tears streamed", "deep down", "cold as ice",
+    "dark night", "the dead of night", "pitch black", "crystal clear", "time stood still", "frozen in time",
+    "soul mate", "a million pieces", "into the abyss", "the void", "shattered", "endless sky", "endless love",
+    "eyes like the ocean", "lost in your eyes", "heart skipped a beat", "butterflies in my stomach",
+    "like a rose", "red as blood", "white as snow", "silence was deafening", "deafening silence", "at the end of the day",
+    "against all odds", "a sea of", "light at the end of the tunnel", "since the dawn of time", "with all my heart",
+    "pierced my heart", "fire in my soul", "burning desire", "my everything", "bittersweet", "rollercoaster",
+    "heavy heart", "falling apart", "fell apart", "weight of the world", "only time will tell", "stars in the sky"];
+  const WEAK_VERBS = new Set("is are was were be been being am has have had got get gets getting there's it's".split(" "));
+  const WEAK_ENDINGS = new Set("the a an of and to in on at for with my your his her their our its but or as is was that this from by".split(" "));
+
+  const syllables = (w) => {
+    w = w.toLowerCase().replace(/[^a-z]/g, "");
+    if (!w) return 0;
+    if (w.length <= 3) return 1;
+    w = w.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/, "").replace(/^y/, "");
+    return Math.max(1, (w.match(/[aeiouy]{1,2}/g) || []).length);
+  };
+  const wordCount = (t) => (t.match(/[\p{L}’'-]+/gu) || []).length;
+
+  const STEPS = [
+    {
+      title: "Hear it", minutes: 5,
+      who: "Ursula K. Le Guin, Steering the Craft",
+      why: "Le Guin taught that the sound of writing is where it lives: read it out loud and your ear catches what your eye skims over.",
+      todo: ["Press ▶ and listen, or read it out loud yourself.", "Tap every line where you stumbled, got bored, or winced. Don't fix anything yet."],
+      tool: "listen",
+    },
+    {
+      title: "Find the heart", minutes: 5,
+      who: "Richard Hugo, The Triggering Town",
+      why: "Hugo told poets that what starts a poem is often not what the poem is really about. The real subject shows up along the way.",
+      todo: ["Tap the one line you'd keep if you could keep only one. That's the heart.", "Ask: does the poem lead toward it, or wander away? Could it start closer to it?"],
+      tool: "heart",
+    },
+    {
+      title: "Cut 10%", minutes: 10,
+      who: "Stephen King, On Writing · George Orwell",
+      why: "King’s rule of thumb: second draft = first draft minus 10%. Orwell: “If it is possible to cut a word out, always cut it out.”",
+      todo: ["Highlighted words are often filler. Delete the ones the poem doesn't miss.", "Aim for the target word count. Tap ✎ Edit to change the poem."],
+      tool: "cut",
+    },
+    {
+      title: "Show, don't name", minutes: 10,
+      who: "Ezra Pound · Natalie Goldberg, Writing Down the Bones",
+      why: "Pound: “Go in fear of abstractions.” Goldberg’s advice is to be specific: not “fruit” but the actual fruit. Feelings land through things you can see, hear, touch.",
+      todo: ["Highlighted words name a feeling or an idea.", "Pick one or two. Replace each with an image: what does it look, sound or smell like? Tap a word to look it up."],
+      tool: "abstract",
+    },
+    {
+      title: "Fresh, not familiar", minutes: 5,
+      who: "George Orwell, Politics and the English Language",
+      why: "Orwell warned against any figure of speech “you are used to seeing in print.” A phrase that arrives too easily is usually someone else’s.",
+      todo: ["Highlighted phrases are common clichés.", "Swap each for something only you would notice. If nothing's highlighted, look for phrases you've heard in songs."],
+      tool: "cliche",
+    },
+    {
+      title: "Strong verbs", minutes: 5,
+      who: "Strunk & White, The Elements of Style",
+      why: "“Use the active voice” and lean on verbs: a strong verb can do the work of a verb plus an adverb.",
+      todo: ["Highlighted: weak verbs (is, was, had…) and -ly adverbs.", "Change two or three into one vivid verb. “walked slowly” → “drifted”."],
+      tool: "verbs",
+    },
+    {
+      title: "Line endings & sound", minutes: 10,
+      who: "Mary Oliver, A Poetry Handbook",
+      why: "Oliver wrote about the line as a unit of breath: where a line breaks changes what the reader hears and how long they wait.",
+      todo: ["Lines ending on small words (the, of, and…) are marked. Try ending on a strong noun or verb.", "Check the syllable counts on the right: wild jumps can be on purpose, or a stumble. Tap an end word to find its rhymes."],
+      tool: "lines",
+    },
+    {
+      title: "The edges", minutes: 5,
+      who: "a classic workshop test",
+      why: "Poems often start a line before they need to and end a line after they should, explaining what the image already said.",
+      todo: ["Read it without the first line. Then without the last line.", "If either version is stronger, cut it for real."],
+      tool: "edges",
+    },
+    {
+      title: "Title", minutes: 5,
+      who: "",
+      why: "A title is the first line the reader sees. It can set the scene so the poem doesn't have to, or add a second meaning.",
+      todo: ["Try three titles. Keep the one that makes the poem mean a little more."],
+      tool: "title",
+    },
+    {
+      title: "Read it once more", minutes: 5,
+      who: "",
+      why: "Look how far it came. Then decide what this poem wants next.",
+      todo: ["Listen to it one last time.", "Compare your first draft with this one."],
+      tool: "finish",
+    },
+  ];
+
+  const wsLoad = () => store.get("workshop", []);
+  const wsSave = (list) => store.set("workshop", list);
+  const wsGet = (id) => wsLoad().find((p) => p.id === id);
+  function wsUpdate(id, fn) {
+    const list = wsLoad();
+    const p = list.find((x) => x.id === id);
+    if (!p) return null;
+    fn(p);
+    p.updatedAt = Date.now();
+    wsSave(list);
+    return p;
+  }
+
+  function renderWorkshopHome() {
+    document.title = "Workshop · Word World";
+    $("#q").value = "";
+    const list = wsLoad().sort((a, b) => b.updatedAt - a.updatedAt);
+    app.innerHTML = `
+      <section class="hero small">
+        <p class="eyebrow">Workshop</p>
+        <h1>Make it better, one step at a time</h1>
+        <p class="lede">Ten short steps from writers who teach. One at a time, about 5–10 minutes each.
+        Skip any step, stop anytime: it saves as you go. Tip from Stephen King: let a draft rest
+        at least a night first, so you read it like a stranger.</p>
+      </section>
+      <section class="card ws-new">
+        <h2>A new poem or passage</h2>
+        <input id="ws-title" placeholder="Title (optional)">
+        <textarea id="ws-text" rows="8" placeholder="Paste or type your draft here…"></textarea>
+        <button type="button" id="ws-start">Start the workshop →</button>
+      </section>
+      ${list.length ? `<section class="card"><h2>Your drafts</h2><div class="ws-list">${list.map((p) => `
+        <a class="ws-item" href="#workshop/${encodeURIComponent(p.id)}">
+          <strong>${esc(p.title || p.text.split("\n")[0].slice(0, 50) || "Untitled")}</strong>
+          <span>${p.step >= STEPS.length ? "✓ finished" : `step ${p.step + 1} of ${STEPS.length} · ${esc(STEPS[p.step].title)}`}</span>
+        </a>`).join("")}</div></section>` : ""}`;
+    $("#ws-start").addEventListener("click", () => {
+      const text = $("#ws-text").value.replace(/\s+$/, "");
+      if (!text.trim()) return $("#ws-text").focus();
+      const id = Date.now().toString(36);
+      const list = wsLoad();
+      list.push({ id, title: $("#ws-title").value.trim(), text, original: text, step: 0, flags: [], heart: null,
+        versions: [{ at: Date.now(), text, label: "First draft" }], updatedAt: Date.now() });
+      wsSave(list);
+      location.hash = "#workshop/" + encodeURIComponent(id);
+    });
+  }
+
+  let wsEditing = false, wsTimer = null, wsHide = null;
+
+  function renderWorkshop(id) {
+    const p = wsGet(id);
+    if (!p) { location.hash = "#workshop"; return; }
+    document.title = `${p.title || "Draft"} · Workshop · Word World`;
+    const n = Math.min(p.step, STEPS.length - 1);
+    const s = STEPS[n];
+    const done = p.step >= STEPS.length;
+    const words = wordCount(p.text);
+    const originalWords = wordCount(p.original);
+    app.innerHTML = `
+      <article class="ws">
+        <p class="back"><a href="#workshop">← All drafts</a></p>
+        <div class="ws-progress" aria-label="Step ${n + 1} of ${STEPS.length}">${STEPS.map((x, i) =>
+          `<button type="button" data-goto="${i}" class="${i < p.step ? "done" : ""} ${i === n ? "now" : ""}" title="${esc(x.title)}"></button>`).join("")}</div>
+        <section class="card ws-step">
+          <p class="eyebrow">Step ${n + 1} of ${STEPS.length} · about ${s.minutes} min${done ? " · finished ✓" : ""}</p>
+          <h2>${esc(s.title)}</h2>
+          <p class="why">${esc(s.why)}${s.who ? ` <span class="who">— ${esc(s.who)}</span>` : ""}</p>
+          <ol class="todo">${s.todo.map((t) => `<li>${esc(t)}</li>`).join("")}</ol>
+          <div class="ws-tool" id="ws-tool"></div>
+          <div class="ws-nav">
+            <button type="button" class="quiet" id="ws-prev" ${n === 0 ? "disabled" : ""}>← Back</button>
+            <button type="button" class="ghost small" id="ws-timer">⏱ 5-minute timer</button>
+            <button type="button" class="quiet" id="ws-skip">Skip</button>
+            <button type="button" id="ws-next">${n === STEPS.length - 1 ? "Finish ✓" : "Done, next →"}</button>
+          </div>
+        </section>
+        <section class="card ws-poem">
+          <div class="ws-poem-head">
+            <h2>${esc(p.title || "Your draft")}</h2>
+            <span class="muted">${words} words${originalWords !== words ? ` (was ${originalWords})` : ""}</span>
+            <button type="button" class="ghost small" id="ws-edit">${wsEditing ? "Done editing" : "✎ Edit"}</button>
+          </div>
+          <div id="ws-body"></div>
+        </section>
+      </article>`;
+
+    const body = $("#ws-body");
+    const lines = p.text.split("\n");
+    const tool = $("#ws-tool");
+
+    // The poem, with only this step's marks.
+    const markLine = (line, i) => {
+      const toks = line.split(/([\p{L}’'-]+)/u);
+      let html = toks.map((t, k) => {
+        if (k % 2 === 0) return esc(t);
+        const w = t.toLowerCase().replace(/’/g, "'");
+        const link = (cls) => `<a class="${cls}" href="#/${encodeURIComponent(w.replace(/'s$/, ""))}">${esc(t)}</a>`;
+        if (s.tool === "cut" && FILLER.has(w)) return `<mark class="hl">${esc(t)}</mark>`;
+        if (s.tool === "abstract" && ABSTRACT.has(w)) return link("hl");
+        if (s.tool === "verbs" && (WEAK_VERBS.has(w) || (/ly$/.test(w) && w.length > 4 && !["only", "early", "family", "holy", "lonely", "ugly", "belly", "lily", "fly", "july", "reply", "supply", "apply", "rely", "silly", "jelly", "bully", "folly", "melancholy"].includes(w)))) return `<mark class="hl">${esc(t)}</mark>`;
+        return esc(t);
+      }).join("");
+      if (s.tool === "cliche") {
+        for (const c of CLICHES) html = html.replace(new RegExp(`\\b(${reEsc(c)})\\b`, "gi"), `<mark class="hl">$1</mark>`);
+      }
+      if (s.tool === "lines" && line.trim()) {
+        const last = (line.match(/[\p{L}’'-]+/gu) || []).pop() || "";
+        const weak = WEAK_ENDINGS.has(last.toLowerCase());
+        const syl = (line.match(/[\p{L}’'-]+/gu) || []).reduce((a, w) => a + syllables(w), 0);
+        html = html.replace(new RegExp(`${reEsc(esc(last))}([^\\p{L}]*)$`, "u"),
+          `<a class="${weak ? "hl weak" : "endword"}" href="#/${encodeURIComponent(last.toLowerCase())}">${esc(last)}</a>$1`);
+        html += `<span class="syl">${syl}</span>`;
+      }
+      return html;
+    };
+
+    const drawPoem = () => {
+      if (wsEditing) {
+        body.innerHTML = `<textarea id="ws-edit-area" rows="${Math.max(8, lines.length + 2)}">${esc(p.text)}</textarea>
+          <p class="hint">Changes save as you type. Tap “Done editing” to see this step’s highlights again.</p>`;
+        const ta = $("#ws-edit-area");
+        ta.focus();
+        ta.addEventListener("input", () => wsUpdate(id, (x) => { x.text = ta.value; }));
+        return;
+      }
+      body.innerHTML = `<div class="ws-lines ${["listen", "heart"].includes(s.tool) ? "tappable" : ""}">${lines.map((l, i) => {
+        const hidden = (wsHide === "first" && i === lines.findIndex((x) => x.trim())) ||
+                       (wsHide === "last" && i === lines.length - 1 - [...lines].reverse().findIndex((x) => x.trim()));
+        const cls = [p.flags.includes(i) && s.tool === "listen" ? "flagged" : "", p.heart === i ? "heart" : "", hidden ? "hidden-line" : ""].join(" ");
+        return l.trim() ? `<div class="ws-line ${cls}" data-line="${i}">${markLine(l, i)}</div>` : `<div class="ws-gap"></div>`;
+      }).join("")}</div>`;
+      body.querySelectorAll(".tappable .ws-line").forEach((el) => el.addEventListener("click", (e) => {
+        if (e.target.closest("a")) return;
+        const i = +el.dataset.line;
+        wsUpdate(id, (x) => {
+          if (s.tool === "listen") x.flags = x.flags.includes(i) ? x.flags.filter((f) => f !== i) : [...x.flags, i];
+          else x.heart = x.heart === i ? null : i;
+        });
+        renderWorkshop(id);
+      }));
+    };
+    drawPoem();
+
+    // Step tools.
+    const speak = (text) => {
+      if (!("speechSynthesis" in window)) return alert("Your browser can't read aloud. Read it out loud yourself: it works even better.");
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text.replace(/\n\s*\n/g, ". \n"));
+      u.rate = 0.85;
+      speechSynthesis.speak(u);
+    };
+    if (s.tool === "listen" || s.tool === "finish") {
+      tool.innerHTML = `<button type="button" class="ghost small" id="ws-play">▶ Read it to me</button>
+        <button type="button" class="quiet" id="ws-stop">■ Stop</button>
+        ${s.tool === "listen" ? `<span class="muted">${p.flags.length ? `${p.flags.length} line(s) marked` : "Tap lines in your draft below to mark them."}</span>` : ""}`;
+      $("#ws-play").addEventListener("click", () => speak(p.text));
+      $("#ws-stop").addEventListener("click", () => speechSynthesis.cancel());
+    }
+    if (s.tool === "heart") {
+      tool.innerHTML = p.heart != null
+        ? `<p class="heart-line">♥ ${esc(lines[p.heart] || "")}</p><p class="muted">Every other line should earn its place next to this one.</p>`
+        : `<p class="muted">Tap a line in your draft below.</p>`;
+    }
+    if (s.tool === "cut") {
+      const target = Math.round(originalWords * 0.9);
+      tool.innerHTML = `<div class="meter-bar"><div style="width:${Math.min(100, Math.round((words / originalWords) * 100))}%"></div></div>
+        <p class="muted">${words} words now · target ≈ ${target} ${words <= target ? "· ✓ you did it" : `· ${words - target} to go`}</p>`;
+    }
+    if (s.tool === "abstract" || s.tool === "verbs" || s.tool === "cliche") {
+      const count = body.querySelectorAll(".hl").length;
+      tool.innerHTML = `<p class="muted">${count ? `${count} highlighted. You don’t have to change them all: two or three is plenty.` : "Nothing highlighted. Nice. Read it once with this step in mind anyway."}</p>`;
+    }
+    if (s.tool === "lines") {
+      tool.innerHTML = `<p class="muted">Numbers on the right are rough syllable counts. Underlined end words link to their rhymes and synonyms.</p>`;
+    }
+    if (s.tool === "edges") {
+      tool.innerHTML = `<div class="seg">
+          <button type="button" data-hide="" class="${!wsHide ? "on" : ""}">Whole poem</button>
+          <button type="button" data-hide="first" class="${wsHide === "first" ? "on" : ""}">Without first line</button>
+          <button type="button" data-hide="last" class="${wsHide === "last" ? "on" : ""}">Without last line</button>
+        </div>`;
+      tool.querySelectorAll("[data-hide]").forEach((b) => b.addEventListener("click", () => { wsHide = b.dataset.hide || null; renderWorkshop(id); }));
+    }
+    if (s.tool === "title") {
+      tool.innerHTML = `<input id="ws-title-edit" value="${esc(p.title || "")}" placeholder="A title…">`;
+      $("#ws-title-edit").addEventListener("input", (e) => wsUpdate(id, (x) => { x.title = e.target.value; }));
+      $("#ws-title-edit").addEventListener("change", () => renderWorkshop(id));
+    }
+    if (s.tool === "finish") {
+      tool.innerHTML += `
+        <details class="compare"><summary>Compare first draft and now</summary>
+          <div class="compare-cols">
+            <div><h3>First draft · ${originalWords} words</h3><pre>${esc(p.original)}</pre></div>
+            <div><h3>Now · ${words} words</h3><pre>${esc(p.text)}</pre></div>
+          </div>
+        </details>
+        <div class="next-ideas">
+          <h3>What now?</h3>
+          <ul>
+            <li><strong>Read it to one person.</strong> Watch where they react. That's your poem's real heart.</li>
+            <li><strong>Record yourself reading it.</strong> Listening back a week later is a whole new edit.</li>
+            <li><strong>Keep it in Inspiration</strong> next to the writers you love: <button type="button" class="ghost small" id="ws-to-inspo">Add to Inspiration</button></li>
+            <li><strong>Share it.</strong> Open mics, a writing group, or literary magazines. Duotrope and Submittable list magazines that take new writers.</li>
+            <li><strong>Let it rest, then run the workshop again.</strong> Good poems usually take a few rounds.</li>
+          </ul>
+        </div>`;
+      $("#ws-play").addEventListener("click", () => speak(p.text));
+      $("#ws-stop").addEventListener("click", () => speechSynthesis.cancel());
+      $("#ws-to-inspo").addEventListener("click", () => {
+        const d = loadInspo();
+        d.added.unshift({ id: "mine-" + Date.now().toString(36), author: "Me", work: p.title || "Untitled", text: p.text });
+        store.set("inspo", d);
+        toast(`Added to <a href="#inspiration">Inspiration</a>`);
+      });
+    }
+
+    // Navigation.
+    const go = (step, snapshot) => {
+      wsEditing = false; wsHide = null;
+      if (wsTimer) { clearInterval(wsTimer); wsTimer = null; }
+      if ("speechSynthesis" in window) speechSynthesis.cancel();
+      wsUpdate(id, (x) => {
+        if (snapshot && x.versions[x.versions.length - 1].text !== x.text) {
+          x.versions.push({ at: Date.now(), text: x.text, label: `After “${STEPS[n].title}”` });
+        }
+        x.step = step;
+      });
+      renderWorkshop(id);
+      window.scrollTo(0, 0);
+    };
+    $("#ws-next").addEventListener("click", () => go(n + 1, true));
+    $("#ws-skip").addEventListener("click", () => go(Math.min(n + 1, STEPS.length), false));
+    $("#ws-prev").addEventListener("click", () => go(Math.max(0, n - 1), false));
+    app.querySelectorAll("[data-goto]").forEach((b) => b.addEventListener("click", () => go(+b.dataset.goto, false)));
+    $("#ws-edit").addEventListener("click", () => { wsEditing = !wsEditing; renderWorkshop(id); });
+    $("#ws-timer").addEventListener("click", (e) => {
+      if (wsTimer) { clearInterval(wsTimer); wsTimer = null; e.target.textContent = "⏱ 5-minute timer"; return; }
+      let left = 300;
+      const tick = () => {
+        const b = $("#ws-timer");
+        if (!b) { clearInterval(wsTimer); wsTimer = null; return; }
+        b.textContent = left > 0 ? `⏱ ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")} (tap to stop)` : "⏱ Time! Stop or keep going";
+        if (left-- <= 0) { clearInterval(wsTimer); wsTimer = null; }
+      };
+      tick();
+      wsTimer = setInterval(tick, 1000);
+    });
+  }
+
   // ---------- routing ----------
   $("#search").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -1089,7 +1442,11 @@
     window.scrollTo(0, 0);
     inspoState.composing = null;
     $("#inspo-btn").classList.toggle("on", location.hash === "#inspiration");
+    $("#ws-btn").classList.toggle("on", location.hash.startsWith("#workshop"));
+    if ("speechSynthesis" in window) speechSynthesis.cancel();
     if (location.hash === "#inspiration") return renderInspiration();
+    if (location.hash === "#workshop") return renderWorkshopHome();
+    if (location.hash.startsWith("#workshop/")) return renderWorkshop(decodeURIComponent(location.hash.slice(10)));
     if (location.hash.startsWith("#poem/")) {
       const [author, title, word] = location.hash.slice(6).split("/").map(decodeURIComponent);
       return renderPoem(author, title, word);

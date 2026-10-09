@@ -22,6 +22,23 @@ A word companion for writing poetry and more beautiful prose. Look up any word a
 
 Also: a word of the day, a *Surprise me* button, and every word on every page is a link.
 
+## Workshop tab
+
+Paste a poem or passage and edit it in ten short steps (about 5–10 minutes each), one at a time,
+with only that step's problems highlighted. Built for short bursts of focus: skip any step, use the
+optional 5-minute timer, stop anytime (it saves as you go).
+
+1. **Hear it**: the app reads it aloud; tap lines where you stumble (Ursula K. Le Guin)
+2. **Find the heart**: the one line you'd keep (Richard Hugo)
+3. **Cut 10%**: filler words highlighted, with a word-count target (Stephen King, George Orwell)
+4. **Show, don't name**: abstract words highlighted, each linked to its word page (Ezra Pound, Natalie Goldberg)
+5. **Fresh, not familiar**: clichés flagged (George Orwell)
+6. **Strong verbs**: weak verbs and -ly adverbs (Strunk & White)
+7. **Line endings & sound**: weak line endings, syllables per line, end words linked to rhymes (Mary Oliver)
+8. **The edges**: read it without the first line, then without the last
+9. **Title**
+10. **Read it once more**: compare first draft and now, and ideas for what to do with it next
+
 ## Inspiration tab
 
 Passages considered beautiful: Plath, Lispector, Morrison, Hemingway, Nabokov, McCarthy,
