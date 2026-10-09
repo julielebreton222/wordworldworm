@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#f6f1e7"/>
+  <!-- ink line the quill is writing -->
+  <path d="M96 430 C 150 405, 190 445, 240 418" fill="none" stroke="#2b2620" stroke-width="10" stroke-linecap="round"/>
+  <g transform="rotate(38 256 256)">
+    <!-- vane -->
+    <path d="M256 40 C 345 120, 350 300, 262 392 L 250 392 C 162 300, 167 120, 256 40 Z" fill="#8a3b2e"/>
+    <!-- notches in the barbs -->
+    <path d="M304 150 L 336 132 M 196 200 L 168 186 M 312 262 L 340 254 M 200 300 L 176 300" stroke="#f6f1e7" stroke-width="9" stroke-linecap="round"/>
+    <!-- shaft -->
+    <path d="M256 70 L 256 440" stroke="#f6f1e7" stroke-width="10" stroke-linecap="round"/>
+    <!-- nib -->
+    <path d="M247 430 L 265 430 L 256 476 Z" fill="#b48a3c"/>
+  </g>
+</svg>

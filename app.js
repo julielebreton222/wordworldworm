@@ -1,4 +1,4 @@
-/* Quill: a word companion for poets and prose writers.
+/* Word World: a word companion for poets and prose writers.
  * Plain JS, no build step. Data comes from three free, keyless APIs:
  *   Datamuse   – definitions, synonyms, antonyms, rhymes, syllables, stress, word pairings
  *   Wiktionary – etymology, IPA pronunciation, hyphenation
@@ -7,7 +7,7 @@
 (() => {
   const DATAMUSE = "https://api.datamuse.com/words";
   const WIKT = "https://en.wiktionary.org/w/api.php";
-  const POETRY = "https://poetrydb.org/lines";
+  const POETRY = "https://poetrydb.org";
 
   const POS = { n: "noun", v: "verb", adj: "adjective", adv: "adverb", u: "other" };
 
@@ -66,23 +66,31 @@
 
   // ---------- Wiktionary: etymology, IPA, hyphenation ----------
   // Turn a Wiktionary <p> into safe HTML: plain text, with the quoted word forms kept in italics.
-  function cleanNode(node) {
+  function cleanNode(node, boldAsMark = false) {
     let out = "";
     node.childNodes.forEach((c) => {
       if (c.nodeType === 3) out += esc(c.textContent);
       else if (c.nodeType === 1) {
         if (c.matches("sup, .reference, style, .mw-editsection")) return;
-        const inner = cleanNode(c);
-        out += c.tagName === "I" || c.tagName === "EM" ? `<em>${inner}</em>` : inner;
+        const inner = cleanNode(c, boldAsMark);
+        if (c.tagName === "I" || c.tagName === "EM") out += `<em>${inner}</em>`;
+        else if (boldAsMark && c.tagName === "B") out += `<mark>${inner}</mark>`;
+        else out += inner;
       }
     });
     return out;
   }
 
   // Etymologies don't change, so each word's result is cached in the browser after the first fetch.
-  async function wiktionary(word) {
+  // The origin and literature sections both ask for the page at once; share one request.
+  const wiktInflight = {};
+  function wiktionary(word) {
+    return (wiktInflight[word] ||= loadWiktionary(word).finally(() => delete wiktInflight[word]));
+  }
+
+  async function loadWiktionary(word) {
     const cache = store.get("wikt", {});
-    if (cache[word]) return cache[word];
+    if (cache[word] && cache[word].quotes) return cache[word];
     const result = await fetchWiktionary(word);
     if (result) {
       const keys = Object.keys(cache);
@@ -110,7 +118,7 @@
     const english = doc.getElementById("English");
     if (!english) return null;
 
-    const result = { etymology: [], ipa: null, hyphenation: null };
+    const result = { etymology: [], ipa: null, hyphenation: null, quotes: [] };
     let node = (english.closest(".mw-heading") || english).nextElementSibling;
     let inEtym = false;
     while (node) {
@@ -128,6 +136,16 @@
           const ipa = node.querySelector && node.querySelector(".IPA");
           if (ipa && /^[/[]/.test(ipa.textContent)) result.ipa = ipa.textContent;
         }
+        // Dated quotations from books, used to illustrate each sense.
+        node.querySelectorAll && node.querySelectorAll(".citation-whole").forEach((c) => {
+          const passage = c.querySelector(".cited-passage, .e-quotation");
+          const source = c.querySelector(".cited-source");
+          if (!passage || !source || result.quotes.length >= 12) return;
+          source.querySelectorAll("small, sup, .q-hellip-b, .q-hellip-sp").forEach((x) => x.remove());
+          const text = cleanNode(passage, true).trim();
+          const cite = source.textContent.replace(/\s+/g, " ").replace(/[:,]\s*$/, "").trim();
+          if (text) result.quotes.push({ text, cite: cite.length > 180 ? cite.slice(0, 177) + "…" : cite });
+        });
         if (!result.hyphenation && node.tagName === "UL") {
           const li = [...node.querySelectorAll("li")].find((l) => /^Hyphenation/.test(l.textContent));
           if (li) result.hyphenation = li.textContent.replace(/^Hyphenation:\s*/, "").trim();
@@ -138,16 +156,102 @@
     return result;
   }
 
+  // ---------- poems: saving and reading in full ----------
+  // Saved under "quill:poems" as { id: { author, title, lines, savedAt } } so they open offline.
+  const poemCache = {};
+  const poemId = (p) => `poem:${p.author}|${p.title}`;
+  const poemHref = (p, word) => `#poem/${encodeURIComponent(p.author)}/${encodeURIComponent(p.title)}` +
+    (word ? `/${encodeURIComponent(word)}` : "");
+  const isSaved = (id) => !!store.get("poems", {})[id];
+  const saveLabel = (id) => (isSaved(id) ? "★ Saved" : "☆ Save poem");
+
+  function toggleSavePoem(id) {
+    const saved = store.get("poems", {});
+    if (saved[id]) {
+      const notes = (loadInspo().notes[id] || []).length;
+      if (notes && !confirm("Unsave this poem? Your notes and writing on it will be hidden until you save it again.")) return;
+      delete saved[id];
+    } else {
+      const p = poemCache[id];
+      if (!p) return;
+      saved[id] = { ...p, savedAt: Date.now() };
+    }
+    store.set("poems", saved);
+    document.querySelectorAll(`[data-save-poem="${CSS.escape(id)}"]`).forEach((b) => {
+      b.textContent = saveLabel(id);
+      b.classList.toggle("on", isSaved(id));
+    });
+  }
+
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-save-poem]");
+    if (!b) return;
+    toggleSavePoem(b.dataset.savePoem);
+    if (location.hash === "#inspiration" && b.closest(".passage")) renderInspiration();
+  });
+
+  async function renderPoem(author, title, word) {
+    document.title = `${title} · Word World`;
+    $("#q").value = "";
+    const id = poemId({ author, title });
+    app.innerHTML = `
+      <article class="reader">
+        <p class="back"><a href="#inspiration" id="back">← Back</a></p>
+        <h1 class="poem-title">${esc(title)}</h1>
+        <p class="byline">${esc(author)}</p>
+        <div class="reader-actions">
+          <button type="button" class="save" data-save-poem="${esc(id)}"></button>
+        </div>
+        <div class="poem-body"><p class="loading">Opening the poem…</p></div>
+        <p class="hint">Tap any word to look it up.</p>
+      </article>`;
+    $("#back").addEventListener("click", (e) => {
+      if (history.length > 1) { e.preventDefault(); history.back(); }
+    });
+
+    let poem = store.get("poems", {})[id] || poemCache[id];
+    if (!poem) {
+      try {
+        const res = await getJSON(`${POETRY}/title/${encodeURIComponent(title)}:abs/author,title,lines`, 20000);
+        const list = Array.isArray(res) ? res : [];
+        poem = list.find((p) => p.author === author) || list[0];
+        if (poem) poemCache[id] = { author, title, lines: poem.lines };
+      } catch { /* shown below */ }
+    }
+    if (!location.hash.startsWith("#poem/")) return; // navigated away while loading
+    const body = $(".poem-body");
+    if (!poem) {
+      body.innerHTML = empty("Couldn't open this poem just now. Try again in a moment.");
+      return;
+    }
+    const btn = $(".reader-actions .save");
+    btn.textContent = saveLabel(id);
+    btn.classList.toggle("on", isSaved(id));
+    const markRe = word ? new RegExp(`^${reEsc(word)}(?:s|es|d|ed|ing)?$`, "i") : null;
+    body.innerHTML = poem.lines.map((l) => l.trim()
+      ? `<span>${linkWords(l, markRe)}</span>`
+      : `<span class="stanza-break"></span>`).join("");
+    const first = body.querySelector("mark");
+    if (first) first.scrollIntoView({ block: "center" });
+  }
+
   // ---------- PoetryDB: famous lines ----------
+  // Matches the word and its common endings: ember, embers; wander, wanders, wandered, wandering.
+  const formsRe = (word, flags = "i") => new RegExp(`\\b(${reEsc(word)}(?:s|es|d|ed|ing)?)\\b`, flags);
+
   async function poems(word) {
-    const data = await getJSON(`${POETRY}/${encodeURIComponent(word)}/author,title,lines`, 20000);
-    if (!Array.isArray(data)) return [];
-    const re = new RegExp(`\\b${reEsc(word)}\\b`, "i");
+    const fetchLines = (w) => getJSON(`${POETRY}/lines/${encodeURIComponent(w)}/author,title,lines`, 20000)
+      .then((d) => (Array.isArray(d) ? d : []), () => []);
+    const [a, b] = await Promise.all([fetchLines(word), word.endsWith("s") ? [] : fetchLines(word + "s")]);
+    const seen = new Set();
+    const data = [...a, ...b].filter((p) => !seen.has(p.title + p.author) && seen.add(p.title + p.author));
+    const re = formsRe(word);
     const out = [];
     for (const p of data) {
       const i = p.lines.findIndex((l) => re.test(l));
       if (i === -1) continue;
       const lines = p.lines.slice(Math.max(0, i - 1), i + 2).filter((l) => l.trim());
+      poemCache[poemId(p)] = { author: p.author, title: p.title, lines: p.lines };
       out.push({ author: p.author, title: p.title, lines, match: p.lines[i] });
     }
     // Prefer well-known poets first, then shuffle lightly so repeat visits show new lines.
@@ -156,10 +260,34 @@
     return out.slice(0, 12);
   }
 
+  // ---------- Wikiquote & Wikisource: full-text search ----------
+  // Search snippets come back as HTML with the hit wrapped in <span class="searchmatch">.
+  function snippetHTML(raw) {
+    const div = new DOMParser().parseFromString(`<div>${raw}</div>`, "text/html").body.firstChild;
+    let out = "";
+    div.childNodes.forEach((c) => {
+      if (c.nodeType === 3) out += esc(c.textContent);
+      else if (c.classList && c.classList.contains("searchmatch")) out += `<mark>${esc(c.textContent)}</mark>`;
+      else out += esc(c.textContent);
+    });
+    // Wikisource index pages glue long catalogue numbers onto titles ("2348616The Book…").
+    return out.replace(/\d{5,}/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  async function wikiSearch(host, word, limit) {
+    const url = `https://${host}/w/api.php?` + new URLSearchParams({
+      action: "query", list: "search", srsearch: `"${word}"`, srlimit: String(limit),
+      srprop: "snippet", srnamespace: "0", format: "json", origin: "*",
+    });
+    const data = await getJSON(url);
+    return ((data.query && data.query.search) || [])
+      .map((r) => ({ title: r.title, html: snippetHTML(r.snippet), url: `https://${host}/wiki/${encodeURIComponent(r.title.replace(/ /g, "_"))}` }))
+      .filter((r) => r.html.includes("<mark>"));
+  }
+
   // ---------- rendering ----------
   function highlight(line, word) {
-    const re = new RegExp(`\\b(${reEsc(word)})\\b`, "gi");
-    return esc(line).replace(re, "<mark>$1</mark>");
+    return esc(line).replace(formsRe(word, "gi"), "<mark>$1</mark>");
   }
 
   function section(id, title, sub) {
@@ -178,7 +306,7 @@
   const chips = (list) => `<div class="chips">${list.map(wordLink).join("")}</div>`;
 
   function renderHome() {
-    document.title = "Quill";
+    document.title = "Word World";
     const list = window.QUILL_WORDS;
     const day = Math.floor(Date.now() / 86400000);
     const wotd = list[day % list.length];
@@ -206,7 +334,7 @@
   async function renderWord(raw) {
     const word = raw.trim().toLowerCase();
     if (!word) return renderHome();
-    document.title = `${word} · Quill`;
+    document.title = `${word} · Word World`;
     $("#q").value = word;
 
     const recent = [word, ...store.get("recent", []).filter((w) => w !== word)].slice(0, 16);
@@ -227,7 +355,7 @@
         <a href="#/${encodeURIComponent(word)}" data-jump="syn">Synonyms</a>
         <a href="#/${encodeURIComponent(word)}" data-jump="ant">Antonyms</a>
         <a href="#/${encodeURIComponent(word)}" data-jump="pair">Pairings</a>
-        <a href="#/${encodeURIComponent(word)}" data-jump="lit">In poetry</a>
+        <a href="#/${encodeURIComponent(word)}" data-jump="lit">In literature</a>
       </nav>
       <div class="grid">
         ${section("defs", "Meaning")}
@@ -236,7 +364,7 @@
         ${section("syn", "Synonyms", "&amp; kindred words")}
         ${section("ant", "Antonyms")}
         ${section("pair", "Pairings", "how writers dress it")}
-        ${section("lit", "In poetry", "lines from the poets")}
+        ${section("lit", "In literature", "poems, books &amp; famous writers")}
         <section class="card practice" id="practice">
           <h2>Make it yours</h2>
           <p class="hint">Write one line using <em>${esc(word)}</em>. It goes into your journal with the word.</p>
@@ -330,14 +458,38 @@
     })).catch(fail("pair"));
 
     // Literature
-    poems(word).then(guard((list) => {
-      if (!list.length) return fill("lit", empty("No poems in the PoetryDB collection use this word. Rare words often don't appear; try a synonym."));
-      fill("lit", list.map((p) => `
-        <figure class="quote">
-          <blockquote>${p.lines.map((l) => `<span>${highlight(l, word)}</span>`).join("")}</blockquote>
-          <figcaption>${esc(p.author)}, <cite>${esc(p.title)}</cite></figcaption>
-        </figure>`).join(""));
-    })).catch(guard(() => fill("lit", empty("No poems in the PoetryDB collection use this word."))));
+    // Literature: four sources, each filling its own block as it arrives.
+    fill("lit", `<div id="lit-poems"></div><div id="lit-books"></div><div id="lit-writers"></div><div id="lit-classics"></div>
+      <p class="loading" id="lit-loading">Searching the poets and the libraries…</p>`);
+    const group = (id, title, items) => {
+      const el = document.getElementById(id);
+      if (el && items.length) el.innerHTML = `<div class="lit-group"><h3>${title}</h3><div class="quotes">${items.join("")}</div></div>`;
+      return items.length;
+    };
+    const figure = (body, caption) => `<figure class="quote"><blockquote>${body}</blockquote><figcaption>${caption}</figcaption></figure>`;
+    const prettyTitle = (t) => esc(t.replace(/\//g, " · "));
+    Promise.all([
+      poems(word).then(guard((list) => group("lit-poems", "In poems", list.map((p) => {
+        const id = poemId(p);
+        return figure(p.lines.map((l) => `<span>${highlight(l, word)}</span>`).join(""),
+          `${esc(p.author)}, <cite>${esc(p.title)}</cite>
+           <span class="poem-actions">
+             <a href="${poemHref(p, word)}">Read in full →</a>
+             <button type="button" data-save-poem="${esc(id)}" class="${isSaved(id) ? "on" : ""}">${saveLabel(id)}</button>
+           </span>`);
+      })))).catch(() => 0),
+      wiktionary(word).then(guard((w) => group("lit-books", "Quoted in books", ((w && w.quotes) || []).map((q) =>
+        figure(q.text, esc(q.cite)))))).catch(() => 0),
+      wikiSearch("en.wikiquote.org", word, 10).then(guard((list) => group("lit-writers", "Famous writers", list.map((r) =>
+        figure(`…${r.html}…`, `<a href="${r.url}" target="_blank" rel="noopener">${prettyTitle(r.title)}</a>`))))).catch(() => 0),
+      wikiSearch("en.wikisource.org", word, 10).then(guard((list) => group("lit-classics", "Classic texts", list.map((r) =>
+        figure(`…${r.html}…`, `<a href="${r.url}" target="_blank" rel="noopener"><cite>${prettyTitle(r.title)}</cite></a>`))))).catch(() => 0),
+    ]).then(guard((counts) => {
+      const loading = document.getElementById("lit-loading");
+      if (!loading) return;
+      if (counts.some(Boolean)) loading.remove();
+      else loading.outerHTML = empty("No literary uses found for this word. Try a related form or a synonym.");
+    }));
 
     // Practice line
     const existing = store.get("journal", {})[word];
@@ -456,16 +608,20 @@
   };
 
   // Every word in a passage is a link to its page, so a phrase that catches you is one tap from its roots.
-  const linkWords = (text) => esc(text).replace(/\p{L}[\p{L}’'-]*\p{L}|\p{L}/gu, (w) =>
-    `<a class="w" href="#/${encodeURIComponent(w.toLowerCase().replace(/[’']s$/, ""))}">${w}</a>`);
+  // markRe, if given, highlights the words it matches (used to show the looked-up word inside a poem).
+  const linkWords = (text, markRe) => text.split(/(\p{L}[\p{L}’'-]*\p{L}|\p{L})/u).map((t, i) => {
+    if (i % 2 === 0) return esc(t);
+    const a = `<a class="w" href="#/${encodeURIComponent(t.toLowerCase().replace(/[’']s$/, ""))}">${esc(t)}</a>`;
+    return markRe && markRe.test(t) ? `<mark>${a}</mark>` : a;
+  }).join("");
 
   const fmtDate = (t) => new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
   function renderInspiration() {
-    document.title = "Inspiration · Quill";
+    document.title = "Inspiration · Word World";
     $("#q").value = "";
     const data = loadInspo();
-    const all = [...data.added.map((p) => ({ ...p, mine: true })), ...window.QUILL_PASSAGES];
+    const all = [...data.added.map((p) => ({ ...p, mine: true })), ...savedPoemPassages(), ...window.QUILL_PASSAGES];
     const authors = [...new Set(all.map((p) => p.author))].sort((a, b) =>
       a.split(" ").pop().localeCompare(b.split(" ").pop()));
     const f = inspoState.filter;
@@ -474,9 +630,10 @@
       (f === "all" ||
        (f === "liked" && data.liked[p.id]) ||
        (f === "mine" && p.mine) ||
+       (f === "poems" && p.poem) ||
        (f === "writing" && (data.notes[p.id] || []).length)));
 
-    const filters = [["all", "All"], ["liked", "♥ Loved"], ["writing", "✎ With my writing"], ["mine", "Added by me"]];
+    const filters = [["all", "All"], ["liked", "♥ Loved"], ["writing", "✎ With my writing"], ["poems", "📜 Saved poems"], ["mine", "Added by me"]];
     app.innerHTML = `
       <section class="hero small">
         <p class="eyebrow">Inspiration</p>
@@ -507,6 +664,7 @@
         ${shown.length ? shown.map((p) => passageCard(p, data)).join("") :
           empty(f === "liked" ? "Nothing loved yet. Tap ♡ on a passage that stops you." :
                 f === "writing" ? "You haven't written back to any passage yet." :
+                f === "poems" ? "No saved poems yet. Look up a word, then tap “☆ Save poem” under any poem in the In literature section." :
                 f === "mine" ? "Add a passage from a book you love with “+ Add a passage”." : "No passages.")}
       </div>`;
 
@@ -531,6 +689,17 @@
     });
   }
 
+  // Saved poems appear in Inspiration as their opening lines, with a link to read them whole.
+  function savedPoemPassages() {
+    return Object.entries(store.get("poems", {}))
+      .sort((a, b) => b[1].savedAt - a[1].savedAt)
+      .map(([id, poem]) => {
+        const lines = poem.lines.filter((l) => l.trim());
+        const opening = lines.slice(0, 6).join("\n") + (lines.length > 6 ? "\n…" : "");
+        return { id, author: poem.author, work: poem.title, text: opening, poem };
+      });
+  }
+
   function passageCard(p, data) {
     const notes = data.notes[p.id] || [];
     const liked = !!data.liked[p.id];
@@ -544,6 +713,8 @@
           <button type="button" data-act="comment" class="${composing === "comment" ? "on" : ""}">💬 Note</button>
           <button type="button" data-act="response" class="${composing === "response" ? "on" : ""}">✎ Write back</button>
           ${p.mine ? `<button type="button" data-act="remove" class="quiet">Remove</button>` : ""}
+          ${p.poem ? `<a class="read-full" href="${poemHref(p.poem)}">Read the whole poem →</a>
+            <button type="button" class="quiet" data-save-poem="${esc(p.id)}">★ Saved</button>` : ""}
         </div>
         ${composing ? `
           <div class="composer">
@@ -611,7 +782,8 @@
   function rerenderCard(card, data) {
     const id = card.dataset.id;
     const p = data.added.find((x) => x.id === id);
-    const passage = p ? { ...p, mine: true } : window.QUILL_PASSAGES.find((x) => x.id === id);
+    const passage = p ? { ...p, mine: true } :
+      savedPoemPassages().find((x) => x.id === id) || window.QUILL_PASSAGES.find((x) => x.id === id);
     card.outerHTML = passageCard(passage, data);
   }
 
@@ -631,6 +803,10 @@
     inspoState.composing = null;
     $("#inspo-btn").classList.toggle("on", location.hash === "#inspiration");
     if (location.hash === "#inspiration") return renderInspiration();
+    if (location.hash.startsWith("#poem/")) {
+      const [author, title, word] = location.hash.slice(6).split("/").map(decodeURIComponent);
+      return renderPoem(author, title, word);
+    }
     const w = decodeURIComponent(location.hash.replace(/^#\/?/, ""));
     if (w) renderWord(w); else { $("#q").value = ""; renderHome(); }
   }

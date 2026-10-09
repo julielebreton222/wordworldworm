@@ -49,8 +49,10 @@ button:disabled { cursor: default; opacity: .35; }
   border-bottom: 1px solid var(--line);
 }
 .brand {
+  display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
   font: 600 26px "Cormorant Garamond", serif; text-decoration: none; color: var(--ink);
 }
+.brand img { border-radius: 8px; }
 .search { flex: 1 1 260px; display: flex; gap: 6px; }
 .search input {
   flex: 1; min-width: 0; padding: 9px 14px; border-radius: 999px;
@@ -159,8 +161,9 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
 .tabs button.on span { color: var(--bg); }
 
 /* poetry */
-#lit .body { columns: 2 320px; column-gap: 28px; }
-#lit .body > p { column-span: all; }
+.lit-group + .lit-group, #lit .body > div:not(:empty) + div:not(:empty) { margin-top: 18px; }
+.quotes { columns: 2 320px; column-gap: 28px; }
+.quote figcaption a { color: inherit; }
 .quote { break-inside: avoid; margin: 0 0 20px; }
 .quote blockquote {
   margin: 0; padding-left: 14px; border-left: 2px solid var(--gold);
@@ -254,3 +257,21 @@ a.w:hover { background: var(--mark); }
   font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted);
 }
 .note-meta button { font-size: 13px; padding: 0 4px; }
+
+/* ---------- poems ---------- */
+.poem-actions { display: flex; gap: 10px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
+.poem-actions a { color: var(--accent); }
+.poem-actions button, .passage .actions button[data-save-poem] {
+  border: 1px solid var(--line); background: transparent; border-radius: 999px;
+  padding: 1px 10px; font-size: 14px; color: var(--muted);
+}
+.poem-actions button.on { border-color: var(--gold); color: var(--gold); }
+.read-full { align-self: center; font-size: 16px; margin-left: 4px; }
+.reader { max-width: 640px; margin: 0 auto; }
+.back a { color: var(--muted); text-decoration: none; font-size: 16px; }
+.poem-title { font: italic 500 clamp(36px, 7vw, 56px)/1.1 "Cormorant Garamond", serif; margin: 12px 0 4px; }
+.reader-actions { margin: 12px 0 24px; }
+.poem-body { font-size: 20px; line-height: 1.6; }
+.poem-body span { display: block; }
+.poem-body .stanza-break { height: 1em; }
+.poem-body mark, .passage mark { background: var(--mark); color: inherit; border-radius: 3px; }
