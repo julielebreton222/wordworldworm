@@ -39,10 +39,14 @@
     </div>
     <p class="hint">Words you've saved, with your own lines. Writing a sentence with a new word is the fastest way to keep it.</p>
     <p id="journal-saved" class="journal-saved"></p>
+    <p class="journal-sync"><button type="button" class="ghost small" data-sync-open>⟳ Sync across my devices</button>
+      <span class="muted sync-status"></span></p>
     <div id="journal-list"></div>
   </aside>
 
   <footer class="foot">
+    <p class="foot-sync"><button type="button" class="ghost small" data-sync-open>⟳ Sync across my devices</button>
+      <span class="sync-status"></span></p>
     Definitions, synonyms &amp; rhymes: <a href="https://www.datamuse.com/api/" target="_blank" rel="noopener">Datamuse</a> ·
     Etymology &amp; pronunciation: <a href="https://en.wiktionary.org" target="_blank" rel="noopener">Wiktionary</a> (CC BY-SA, via <a href="https://kaikki.org" target="_blank" rel="noopener">kaikki.org</a>) ·
     Library: <a href="https://www.gutenberg.org" target="_blank" rel="noopener">Project Gutenberg</a> ·
@@ -50,6 +54,15 @@
     Quotations: <a href="https://en.wikiquote.org" target="_blank" rel="noopener">Wikiquote</a> (CC BY-SA), <a href="https://en.wikisource.org" target="_blank" rel="noopener">Wikisource</a>
   </footer>
 
+  <dialog id="sync-dialog" aria-labelledby="sync-title">
+    <div class="sync-head">
+      <h2 id="sync-title">Sync across my devices</h2>
+      <button type="button" id="sync-close" class="quiet" aria-label="Close">✕</button>
+    </div>
+    <div id="sync-body"></div>
+  </dialog>
+
+  <script src="sync.js"></script>
   <script src="words.js"></script>
   <script src="passages.js"></script>
   <script src="app.js"></script>

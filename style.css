@@ -403,3 +403,32 @@ button.ghost.small { padding: 2px 12px; font-size: 15px; }
 }
 .lens button.on { background: var(--accent); border-color: var(--accent); color: var(--bg); }
 .ws-tool .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; flex-basis: 100%; }
+
+/* ---------- sync ---------- */
+.foot-sync { margin: 0 0 10px; display: flex; justify-content: center; align-items: center; gap: 8px; flex-wrap: wrap; }
+.journal-sync { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 14px; }
+#sync-dialog {
+  width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto;
+  border: 1px solid var(--line); border-radius: 16px; padding: 18px 22px;
+  background: var(--card); color: var(--ink); box-shadow: 0 20px 60px rgba(0, 0, 0, .25);
+}
+#sync-dialog::backdrop { background: rgba(20, 15, 10, .45); }
+.sync-head { display: flex; justify-content: space-between; align-items: center; }
+.sync-head h2 { font: 600 28px "Cormorant Garamond", serif; margin: 0; }
+.sync-head button { font-size: 20px; }
+#sync-body p { margin: 10px 0; }
+.sync-steps { padding-left: 1.3em; margin: 8px 0 12px; }
+.sync-steps li { margin: 5px 0; }
+.sync-steps code, #sync-body code { background: var(--accent-soft); padding: 0 5px; border-radius: 4px; font-size: 15px; }
+.sync-field { display: grid; gap: 6px; font-weight: 600; margin-top: 12px; }
+.sync-field input {
+  padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); font-size: 17px;
+}
+#sync-body .primary, #sync-body a.primary {
+  display: inline-block; padding: 9px 18px; border-radius: 999px; border: 0;
+  background: var(--accent); color: var(--bg); text-decoration: none; font-size: 17px;
+}
+#sync-body .primary:disabled { opacity: .6; }
+.sync-ok { color: var(--accent); font-weight: 600; }
+.sync-btns { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+#sync-body .small { font-size: 14px; }

@@ -89,9 +89,19 @@ explains how to run it. To add a book to the library, add its Project Gutenberg 
 
 ## Where your writing lives
 
-Everything you save (journal, saved poems, loved passages, notes, your writing) is kept in **this browser
-only** (localStorage). Nothing is sent anywhere, so it won't sync between your phone and
-laptop, and clearing site data erases it.
+Everything you save (journal, saved poems and passages, loved passages, notes, your writing,
+Workshop drafts) is kept in your browser. To have the same things on your phone and laptop, use
+**⟳ Sync across my devices** (bottom of the page, or in the Journal):
+
+1. Tap **Get my key on GitHub**. It opens GitHub's "new token" page with only the **gist**
+   permission ticked.
+2. Pick "No expiration", press **Generate token**, and copy the key (it starts with `ghp_`).
+3. Paste it into Word World and press **Connect**. Do the same on each device with the same key.
+   A key you already made for My Hangout / Calm Player works too.
+
+Word World keeps one private gist in your account, "Word World sync (private)". Every saved item is
+merged one by one, so two devices never overwrite each other, and deleted things stay deleted. The
+key stays in the browser and can only read and write gists.
 
 ## Running it
 
